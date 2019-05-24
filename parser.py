@@ -1,5 +1,5 @@
 import datetime # for date
-import re
+import re # regex for parsing
 import time # for timing database writes
 
 from bs4 import BeautifulSoup
