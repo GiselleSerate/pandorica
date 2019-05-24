@@ -1,8 +1,11 @@
 from bs4 import BeautifulSoup
 import re
 
+
+# Domains get stored here
 added = []
 removed = []
+
 
 # Open and parse file
 data = open('./updates.html')
@@ -33,6 +36,7 @@ tds = table.find_all('td')
 for td in tds:
     rawDomain = td.string
     removed.append(rawDomain.split(':')[1][:-1]) # Removed has an extraneous close parenthesis
+
 
 # Print summary of parse
 print(f'{len(added)} domains added, like {added[:3]}')
