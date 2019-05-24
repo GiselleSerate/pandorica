@@ -80,7 +80,7 @@ print('Connection established.')
 
 
 # Write domains of all added documents back to index
-for domain in added[:6]: # TODO: expand beyond the first six domains
+for domain in added:
     try:
         # Assume document exists in db; update added
         GiselleDoc.get(id=domain) \
@@ -93,7 +93,7 @@ for domain in added[:6]: # TODO: expand beyond the first six domains
 
 
 # Write domains of all removed documents back to index
-for domain in removed[:6]: # TODO: expand beyond the first six domains
+for domain in removed:
     try:
         # Assume document exists in db; update removed
         GiselleDoc.get(id=domain) \
