@@ -32,7 +32,7 @@ class GiselleDoc(DocType):
 
 
 # Establish connection (localhost:9200 by default, which works for us)
-connections.create_connection(host='10.54.76.50')
+connections.create_connection(host='34.235.226.40')
 
 # Create search of sample web data looking for deb extensions
 eventSearch = Search(index='kibana_sample_data_logs').query('match', extension='deb')
