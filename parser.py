@@ -1,9 +1,10 @@
-from bs4 import BeautifulSoup
-import re
-from elasticsearch_dsl import DocType, Keyword, Text, connections
-import elasticsearch # for exception handling
-import time # for timer
 import datetime # for date
+import re
+import time # for timing database writes
+
+from bs4 import BeautifulSoup
+import elasticsearch # for NotFoundError handling
+from elasticsearch_dsl import DocType, Keyword, Text, connections
 
 
 # For now, deal with fewer domains:
