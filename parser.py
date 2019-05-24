@@ -1,6 +1,6 @@
 from bs4 import BeautifulSoup
 import re
-from elasticsearch_dsl import DocType, Date, Text, Ip, Keyword, Search, connections
+from elasticsearch_dsl import DocType, Keyword, Text, connections
 
 
 # Domains get stored here
@@ -46,7 +46,7 @@ print(f'{len(removed)} domains removed, like {removed[:3]}')
 
 # Now that we've parsed, write back to the database
 # Hard-coded for now:
-date = '05/24/2019'
+date = '16/24/2019'
 
 # Class for writing back to the database
 class GiselleDoc(DocType):
@@ -78,15 +78,28 @@ class GiselleDoc(DocType):
 connections.create_connection(host='34.235.226.40')
 print('Connection established.')
 
-# Write domains of all added documents back to index
-for domain in added[:6]: # GSERATE try the first six only
-    # # Create search of existing database looking for this domain
-    # eventSearch = Search(index='giselletest').query('match', id=domain) # TODO: Is this the most efficient way to do it? 
-    # eventSearch.execute()
-    # existing = eventSearch[0]['added']
-    # print(existing)
 
-    myDoc = GiselleDoc(meta={'id':domain})
-    myDoc.added = existing + date
-    # myDoc.added.append(date)
-    myDoc.save()
+# Write domains of all added documents back to index
+for domain in added[:6]: # TODO: expand beyond the first six domains
+    try:
+        # Assume document exists in db; update added
+        GiselleDoc.get(id=domain) \
+                .update(script='ctx._source.added.add(params.date)', date=date)
+    except: # TODO: Catch elasticsearch.NotFoundError better in future
+        # Create new document in db
+        myDoc = GiselleDoc(meta={'id':domain})
+        myDoc.added.append(date)
+        myDoc.save()
+
+
+# Write domains of all removed documents back to index
+for domain in removed[:6]: # TODO: expand beyond the first six domains
+    try:
+        # Assume document exists in db; update removed
+        GiselleDoc.get(id=domain) \
+                .update(script='ctx._source.removed.add(params.date)', date=date)
+    except: # TODO: Catch elasticsearch.NotFoundError better in future
+        # Create new document in db
+        myDoc = GiselleDoc(meta={'id':domain})
+        myDoc.removed.append(date)
+        myDoc.save()
