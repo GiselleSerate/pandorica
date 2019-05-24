@@ -48,8 +48,8 @@ print(f'{len(removed)} domains removed, like {removed[:3]}')
 
 # Now that we've parsed, write back to the database
 # Hard-coded for now:
-date = '01/24/2019'
-numDomains = 1000
+date = '06/24/2019'
+numDomains = 100
 
 
 # Class for writing back to the database
@@ -90,7 +90,7 @@ for domain in added[:numDomains]:
     try:
         # Assume document exists in db; update added
         GiselleDoc.get(id=domain) \
-                .update(script='ctx._source.added.add(params.date)', date=date)
+                .update(script='if(!ctx._source.added.contains(params.date)) {ctx._source.added.add(params.date)}', date=date)
     except elasticsearch.exceptions.NotFoundError:
         # Create new document in db
         myDoc = GiselleDoc(meta={'id':domain})
@@ -106,7 +106,7 @@ for domain in removed[:numDomains]:
     try:
         # Assume document exists in db; update removed
         GiselleDoc.get(id=domain) \
-                .update(script='ctx._source.removed.add(params.date)', date=date)
+                .update(script='if(!ctx._source.removed.contains(params.date)) {ctx._source.removed.add(params.date)}', date=date)
     except elasticsearch.exceptions.NotFoundError:
         # Create new document in db
         myDoc = GiselleDoc(meta={'id':domain})
