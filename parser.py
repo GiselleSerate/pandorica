@@ -2,7 +2,7 @@ from bs4 import BeautifulSoup
 import re
 from elasticsearch_dsl import DocType, Keyword, Text, connections
 import elasticsearch
-import time # GSERATE take this out later
+import time
 
 
 # Domains get stored here
