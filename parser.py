@@ -1,6 +1,8 @@
 from bs4 import BeautifulSoup
 import re
 from elasticsearch_dsl import DocType, Keyword, Text, connections
+import elasticsearch
+import time # GSERATE take this out later
 
 
 # Domains get stored here
@@ -46,7 +48,9 @@ print(f'{len(removed)} domains removed, like {removed[:3]}')
 
 # Now that we've parsed, write back to the database
 # Hard-coded for now:
-date = '16/24/2019'
+date = '01/24/2019'
+numDomains = 1000
+
 
 # Class for writing back to the database
 class GiselleDoc(DocType):
@@ -80,26 +84,33 @@ print('Connection established.')
 
 
 # Write domains of all added documents back to index
-for domain in added:
+print(f'Writing {numDomains} added domains to database . . .')
+savedTime = time.time()
+for domain in added[:numDomains]:
     try:
         # Assume document exists in db; update added
         GiselleDoc.get(id=domain) \
                 .update(script='ctx._source.added.add(params.date)', date=date)
-    except: # TODO: Catch elasticsearch.NotFoundError better in future
+    except elasticsearch.exceptions.NotFoundError:
         # Create new document in db
         myDoc = GiselleDoc(meta={'id':domain})
         myDoc.added.append(date)
         myDoc.save()
 
+print(f'Writing added domains took {time.time() - savedTime} seconds.')
 
 # Write domains of all removed documents back to index
-for domain in removed:
+print(f'Writing {numDomains} removed domains to database . . .')
+savedTime = time.time()
+for domain in removed[:numDomains]:
     try:
         # Assume document exists in db; update removed
         GiselleDoc.get(id=domain) \
                 .update(script='ctx._source.removed.add(params.date)', date=date)
-    except: # TODO: Catch elasticsearch.NotFoundError better in future
+    except elasticsearch.exceptions.NotFoundError:
         # Create new document in db
         myDoc = GiselleDoc(meta={'id':domain})
         myDoc.removed.append(date)
         myDoc.save()
+
+print(f'Writing removed domains took {time.time() - savedTime} seconds.')
