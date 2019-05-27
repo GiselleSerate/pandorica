@@ -1,4 +1,4 @@
-import datetime # for date
+import datetime
 import re # regex for parsing
 import time # for timing database writes
 
@@ -8,7 +8,7 @@ from elasticsearch_dsl import DocType, Keyword, Text, connections
 
 
 # For now, deal with fewer domains:
-numDomains = 100
+numDomains = None
 
 
 # Determine date to write to db
