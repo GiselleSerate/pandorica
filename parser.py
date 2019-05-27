@@ -1,5 +1,6 @@
 import datetime
 import re # regex for parsing
+import threading
 import time # for timing database writes
 
 from bs4 import BeautifulSoup
@@ -34,23 +35,6 @@ class GiselleDoc(DocType):
         return super(GiselleDoc, self).save(**kwargs)
 
 
-# For now, deal with fewer domains:
-numDomains = None
-
-# Determine date to write to db
-date = datetime.date.today()
-
-# Define regex so we can search for tags beginning with this
-addedPattern = re.compile(r'New Spyware DNS C2 Signatures')
-removedPattern = re.compile(r'Old Spyware DNS C2 Signatures')
-
-
-# Domains get stored here
-added = []
-removed = []
-
-
-
 def parse(stringName, pattern, array, hasParen):
     '''
     Parse out either added or removed domains from file
@@ -68,7 +52,7 @@ def parse(stringName, pattern, array, hasParen):
 
         print(f'{len(array)} domains {stringName}, like {array[:3]}')
     except Exception as e: # TODO: I basically have a catch-all here, which I know is bad
-        print('Parse failed. Are you sure this HTML file is the right format?')
+        print(f'Parse of {stringName} failed. Are you sure this HTML file is the right format?')
         print(e)
         # If we can't parse out domains, don't write to the db
         raise SystemExit
@@ -81,7 +65,7 @@ def writeToDB(stringName, array):
     try:
         print(f'Writing {numDomains} {stringName} domains to database . . .')
         savedTime = time.time()
-        for domain in array[:numDomains]: # TODO: duplicated code. arrays. stop it. 
+        for domain in array[:numDomains]:
             try:
                 # Assume document exists in db; update array
                 GiselleDoc.get(id=domain) \
@@ -94,46 +78,65 @@ def writeToDB(stringName, array):
 
         print(f'Writing {stringName} domains took {time.time() - savedTime} seconds.')
     except Exception as e:
-        print(f'Database writes failed with error {e}')
+        print(f'Database writes of {stringName} failed with error {e}')
+        raise SystemExit
+
+def parseAndWrite(stringName, pattern, array, hasParen): # TODO: ok he's a lil janky
+    parse(stringName, pattern, array, hasParen)
+    writeToDB(stringName, array)
+
+
+if __name__ == '__main__':
+
+    # For now, deal with fewer domains:
+    numDomains = None
+
+    # Determine date to write to db
+    date = datetime.date.today()
+
+    # Define regex so we can search for tags beginning with this
+    addedPattern = re.compile(r'New Spyware DNS C2 Signatures')
+    removedPattern = re.compile(r'Old Spyware DNS C2 Signatures')
+
+    # Domains get stored here
+    added = []
+    removed = []
+
+
+    try:
+        # Get HTML file to parse
+        data = urllib.request.urlopen('http://localhost:8020/updates.html')
+        # data = open('./updates.html') # uncomment if you don't want to worry about hosting
+    except urllib.error.URLError:
+        print('Updates not found. Have you started server.py in the same directory as the updates file?')
         raise SystemExit
 
 
-try:
-    # Get HTML file to parse
-    data = urllib.request.urlopen('http://localhost:8020/updates.html')
-    # data = open('./updates.html') # uncomment if you don't want to worry about hosting
-except urllib.error.URLError:
-    print('Updates not found. Have you started server.py in the same directory as the updates file?')
-    raise SystemExit
+    try:
+        # Establish database connection (port 9200 by default)
+        connections.create_connection(host='34.235.226.40')
+        # connections.create_connection()
+    except Exception as e:
+        print(f'Connection failed to establish')
+        print(e)
+        raise SystemExit
 
 
-try:
-    # Establish database connection (port 9200 by default)
-    connections.create_connection(host='34.235.226.40')
-    # connections.create_connection()
-except Exception as e:
-    print(f'Connection failed to establish')
-    print(e)
-    raise SystemExit
+    # Parse file
+    soup = BeautifulSoup(data, 'html5lib')
 
 
-# Parse file
-soup = BeautifulSoup(data, 'html5lib')
+    try:
+        # Get version number from title
+        version = soup.find('title').string.split(' ')[1]
+        print(f'Analyzing release notes for version {version}')
+    except: # TODO: I basically have a catch-all here, which I know is bad
+        print('Could not find version number. Are you sure this HTML file is the right format?')
+        print(e)
+        # If we can't parse out domains, don't write to the db
+        raise SystemExit
 
 
-try:
-    # Get version number from title
-    version = soup.find('title').string.split(' ')[1]
-    print(f'Analyzing release notes for version {version}')
-except: # TODO: I basically have a catch-all here, which I know is bad
-    print('Could not find version number. Are you sure this HTML file is the right format?')
-    print(e)
-    # If we can't parse out domains, don't write to the db
-    raise SystemExit
-
-
-parse(stringName='added', pattern=addedPattern, array=added, hasParen=False)
-writeToDB(stringName='added', array=added)
-
-parse(stringName='removed', pattern=removedPattern, array=removed, hasParen=True)
-writeToDB(stringName='removed', array=removed)
+    # Start threads for adds and removes
+    threading.Thread(target=parseAndWrite, args=('added', addedPattern, added, False)).start()
+    threading.Thread(target=parseAndWrite, args=('removed', removedPattern, removed, True)).start()
