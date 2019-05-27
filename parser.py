@@ -8,67 +8,6 @@ from elasticsearch_dsl import DocType, Keyword, Text, connections
 import urllib.request
 
 
-# For now, deal with fewer domains:
-numDomains = None
-
-
-# Determine date to write to db
-date = datetime.date.today()
-
-
-# Domains get stored here
-added = []
-removed = []
-
-
-try: # Wraps all the parsing logic. Maybe I can get more granular later. 
-    # Open and parse file
-    # Run pyserver.sh from the dir your updates.html is in first or this line won't work
-    data = urllib.request.urlopen('http://localhost:8020/updates.html')
-    # data = open('./updates.html') # uncomment if you don't want to worry about hosting
-    soup = BeautifulSoup(data, 'html5lib')
-
-    # Define regex so we can search for tags beginning with this
-    addedPattern = re.compile(r'New Spyware DNS C2 Signatures')
-    removedPattern = re.compile(r'Old Spyware DNS C2 Signatures')
-
-    # Get version number from title
-    version = soup.find('title').string.split(' ')[1]
-    print(f'Analyzing release notes for version {version}')
-
-
-    # Added: Pull out a list of tds from parse tree
-    header = soup.find('h3', text=addedPattern)
-    table = header.find_next_sibling('table')
-    tds = table.find_all('td')
-
-    # Added: Get domains from table entries
-    for td in tds:
-        rawDomain = td.string
-        added.append(rawDomain.split(':')[1])
-
-
-    # Removed: Pull out a list of tds from parse tree
-    header = soup.find('h3', text=removedPattern)
-    table = header.find_next_sibling('table')
-    tds = table.find_all('td')
-
-    # Removed: Get domains from table entries
-    for td in tds:
-        rawDomain = td.string
-        removed.append(rawDomain.split(':')[1][:-1]) # Removed has an extraneous close parenthesis
-
-
-    # Print summary of parse
-    print(f'{len(added)} domains added, like {added[:3]}')
-    print(f'{len(removed)} domains removed, like {removed[:3]}')
-
-except:
-    print('Parse failed. Are you sure this HTML file is the right format?')
-    # If we can't parse out domains, don't write to the db
-    raise SystemExit
-
-
 # Class for writing back to the database
 class GiselleDoc(DocType):
     # Use domain as id
@@ -95,40 +34,106 @@ class GiselleDoc(DocType):
         return super(GiselleDoc, self).save(**kwargs)
 
 
-# Establish connection (port 9200 by default)
-connections.create_connection(host='34.235.226.40')
-print('Connection established.')
+# For now, deal with fewer domains:
+numDomains = None
+
+# Determine date to write to db
+date = datetime.date.today()
+
+# Define regex so we can search for tags beginning with this
+addedPattern = re.compile(r'New Spyware DNS C2 Signatures')
+removedPattern = re.compile(r'Old Spyware DNS C2 Signatures')
 
 
-# Write domains of all added documents back to index
-print(f'Writing {numDomains} added domains to database . . .')
-savedTime = time.time()
-for domain in added[:numDomains]:
+# Domains get stored here
+added = []
+removed = []
+
+
+
+def parse(stringName, pattern, array, hasParen):
+    '''
+    Parse out either added or removed domains from file
+    '''
+    # Pull out a list of tds from parse tree
     try:
-        # Assume document exists in db; update added
-        GiselleDoc.get(id=domain) \
-                .update(script='if(!ctx._source.added.contains(params.dateAndVersion)) {ctx._source.added.add(params.dateAndVersion)}', dateAndVersion=[date, version])
-    except elasticsearch.exceptions.NotFoundError:
-        # Create new document in db
-        myDoc = GiselleDoc(meta={'id':domain})
-        myDoc.added.append([date, version])
-        myDoc.save()
+        header = soup.find('h3', text=pattern)
+        table = header.find_next_sibling('table')
+        tds = table.find_all('td')
 
-print(f'Writing added domains took {time.time() - savedTime} seconds.')
+        # Get domains from table entries
+        for td in tds:
+            rawDomain = td.string
+            array.append(rawDomain.split(':')[1][:-1] if hasParen else rawDomain.split(':')[1])
 
+        print(f'{len(array)} domains {stringName}, like {array[:3]}')
+    except Exception as e: # TODO: I basically have a catch-all here, which I know is bad
+        print('Parse failed. Are you sure this HTML file is the right format?')
+        print(e)
+        # If we can't parse out domains, don't write to the db
+        raise SystemExit
 
-# Write domains of all removed documents back to index
-print(f'Writing {numDomains} removed domains to database . . .')
-savedTime = time.time()
-for domain in removed[:numDomains]:
+def writeToDB(stringName, array):
+    '''
+    Write added or removed to database
+    '''
+    # Write domains of all relevant documents back to index
     try:
-        # Assume document exists in db; update removed
-        GiselleDoc.get(id=domain) \
-                .update(script='if(!ctx._source.removed.contains(params.dateAndVersion)) {ctx._source.removed.add(params.dateAndVersion)}', dateAndVersion=[date, version])
-    except elasticsearch.exceptions.NotFoundError:
-        # Create new document in db
-        myDoc = GiselleDoc(meta={'id':domain})
-        myDoc.removed.append([date, version])
-        myDoc.save()
+        print(f'Writing {numDomains} {stringName} domains to database . . .')
+        savedTime = time.time()
+        for domain in array[:numDomains]: # TODO: duplicated code. arrays. stop it. 
+            try:
+                # Assume document exists in db; update array
+                GiselleDoc.get(id=domain) \
+                        .update(script='if(!ctx._source.'+stringName+'.contains(params.dateAndVersion)) {ctx._source.'+stringName+'.add(params.dateAndVersion)}', dateAndVersion=[date, version])
+            except elasticsearch.exceptions.NotFoundError:
+                # Create new document in db
+                myDoc = GiselleDoc(meta={'id':domain})
+                myDoc.array.append([date, version])
+                myDoc.save()
 
-print(f'Writing removed domains took {time.time() - savedTime} seconds.')
+        print(f'Writing {stringName} domains took {time.time() - savedTime} seconds.')
+    except Exception as e:
+        print(f'Database writes failed with error {e}')
+        raise SystemExit
+
+
+try:
+    # Get HTML file to parse
+    data = urllib.request.urlopen('http://localhost:8020/updates.html')
+    # data = open('./updates.html') # uncomment if you don't want to worry about hosting
+except urllib.error.URLError:
+    print('Updates not found. Have you started server.py in the same directory as the updates file?')
+    raise SystemExit
+
+
+try:
+    # Establish database connection (port 9200 by default)
+    connections.create_connection(host='34.235.226.40')
+    # connections.create_connection()
+except Exception as e:
+    print(f'Connection failed to establish')
+    print(e)
+    raise SystemExit
+
+
+# Parse file
+soup = BeautifulSoup(data, 'html5lib')
+
+
+try:
+    # Get version number from title
+    version = soup.find('title').string.split(' ')[1]
+    print(f'Analyzing release notes for version {version}')
+except: # TODO: I basically have a catch-all here, which I know is bad
+    print('Could not find version number. Are you sure this HTML file is the right format?')
+    print(e)
+    # If we can't parse out domains, don't write to the db
+    raise SystemExit
+
+
+parse(stringName='added', pattern=addedPattern, array=added, hasParen=False)
+writeToDB(stringName='added', array=added)
+
+parse(stringName='removed', pattern=removedPattern, array=removed, hasParen=True)
+writeToDB(stringName='removed', array=removed)
