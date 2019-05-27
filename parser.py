@@ -24,7 +24,7 @@ removed = []
 try: # Wraps all the parsing logic. Maybe I can get more granular later. 
     # Open and parse file
     # Run pyserver.sh from the dir your updates.html is in first or this line won't work
-    data = urllib.request.urlopen('http://localhost:8280/updates.html')
+    data = urllib.request.urlopen('http://localhost:8020/updates.html')
     # data = open('./updates.html') # uncomment if you don't want to worry about hosting
     soup = BeautifulSoup(data, 'html5lib')
 
