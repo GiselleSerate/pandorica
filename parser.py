@@ -35,9 +35,11 @@ class GiselleDoc(DocType):
         return super(GiselleDoc, self).save(**kwargs)
 
 
-def parse(stringName, pattern, array, hasParen):
+def parseAndWrite(stringName, pattern, array, hasParen):
     '''
-    Parse out either added or removed domains from file
+    Pulls all domains of one type from the soup
+    and then writes them to the database. 
+    Designed for threadiness. 
     '''
     # Pull out a list of tds from parse tree
     try:
@@ -51,16 +53,13 @@ def parse(stringName, pattern, array, hasParen):
             array.append(rawDomain.split(':')[1][:-1] if hasParen else rawDomain.split(':')[1])
 
         print(f'{len(array)} domains {stringName}, like {array[:3]}')
-    except Exception as e: # TODO: I basically have a catch-all here, which I know is bad
+    except Exception as e:
         print(f'Parse of {stringName} failed. Are you sure this HTML file is the right format?')
         print(e)
         # If we can't parse out domains, don't write to the db
         raise SystemExit
+    writeToDB(stringName, array)
 
-def writeToDB(stringName, array):
-    '''
-    Write added or removed to database
-    '''
     # Write domains of all relevant documents back to index
     try:
         print(f'Writing {numDomains} {stringName} domains to database . . .')
@@ -81,12 +80,9 @@ def writeToDB(stringName, array):
         print(f'Database writes of {stringName} failed with error {e}')
         raise SystemExit
 
-def parseAndWrite(stringName, pattern, array, hasParen): # TODO: ok he's a lil janky
-    parse(stringName, pattern, array, hasParen)
-    writeToDB(stringName, array)
-
 
 if __name__ == '__main__':
+    initialTime = time.time()
 
     # For now, deal with fewer domains:
     numDomains = None
@@ -140,3 +136,5 @@ if __name__ == '__main__':
     # Start threads for adds and removes
     threading.Thread(target=parseAndWrite, args=('added', addedPattern, added, False)).start()
     threading.Thread(target=parseAndWrite, args=('removed', removedPattern, removed, True)).start()
+
+    print(f'Finished running in {time.time()-initialTime} seconds.')
