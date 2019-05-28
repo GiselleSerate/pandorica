@@ -60,7 +60,6 @@ def parseAndWrite(stringName, pattern, array, hasParen):
         raise SystemExit
 
     # Write domains of all relevant documents back to index
-    # try:
     print(f'Writing {numDomains} {stringName} domains to database . . .')
     savedTime = time.time()
     for domain in array[:numDomains]:
@@ -77,16 +76,12 @@ def parseAndWrite(stringName, pattern, array, hasParen):
                 else:
                     myDoc.removed.append([date, version])
                 myDoc.save()
-        # except socket.timeout:
         except Exception as e:
             print('No connection to database.')
             print(e)
             raise SystemExit
 
     print(f'Writing {stringName} domains took {time.time() - savedTime} seconds.')
-    # except Exception as e:
-    #     print(f'Database writes of {stringName} failed with error {e}')
-    #     raise SystemExit
 
 
 if __name__ == '__main__':
@@ -96,7 +91,7 @@ if __name__ == '__main__':
     numDomains = None
 
     # Determine date to write to db
-    date = 'foo' + str(datetime.date.today()) # Avoiding my problems
+    date = datetime.date.today()
 
     # Define regex so we can search for tags beginning with this
     addedPattern = re.compile(r'New Spyware DNS C2 Signatures')
@@ -119,7 +114,7 @@ if __name__ == '__main__':
     try:
         # Establish database connection (port 9200 by default)
         # connections.create_connection(host='34.235.226.40') # TODO actually, I'm not sure this can even fail. 
-        connections.create_connection(host='10.54.92.70') # TODO actually, I'm not sure this can even fail. 
+        connections.create_connection(host='10.54.92.70')
         # connections.create_connection()
     except Exception as e:
         print(f'Connection failed to establish')
