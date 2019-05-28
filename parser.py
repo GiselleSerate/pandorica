@@ -13,6 +13,7 @@ import urllib.request
 class GiselleDoc(DocType):
     # Use domain as id
     id = Text(analyzer='snowball', fields={'raw': Keyword()})
+    domain = Keyword()
     added = Text(multi=True)
     removed = Text(multi=True)
 
@@ -27,6 +28,7 @@ class GiselleDoc(DocType):
     def from_obj(cls, obj):
         return cls(
             id=obj.id,
+            domain=obj.domain,
             added=obj.added,
             removed=obj.removed,
             )
@@ -71,6 +73,7 @@ def parseAndWrite(stringName, pattern, array, hasParen):
             except elasticsearch.exceptions.NotFoundError:
                 # Create new document in db
                 myDoc = GiselleDoc(meta={'id':domain})
+                myDoc.domain = domain
                 if(stringName == 'added'):
                     myDoc.added.append([date, version])
                 else:
