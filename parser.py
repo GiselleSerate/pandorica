@@ -58,34 +58,37 @@ def parseAndWrite(stringName, pattern, array, hasParen):
         print(e)
         # If we can't parse out domains, don't write to the db
         raise SystemExit
-    writeToDB(stringName, array)
 
     # Write domains of all relevant documents back to index
-    try:
-        print(f'Writing {numDomains} {stringName} domains to database . . .')
-        savedTime = time.time()
-        for domain in array[:numDomains]:
-            try:
-                # Assume document exists in db; update array
-                GiselleDoc.get(id=domain) \
-                        .update(script='if(!ctx._source.'+stringName+'.contains(params.dateAndVersion)) {ctx._source.'+stringName+'.add(params.dateAndVersion)}', dateAndVersion=[date, version])
-            except elasticsearch.exceptions.NotFoundError:
-                # Create new document in db
-                myDoc = GiselleDoc(meta={'id':domain})
-                myDoc.array.append([date, version])
-                myDoc.save()
+    # try:
+    print(f'Writing {numDomains} {stringName} domains to database . . .')
+    savedTime = time.time()
+    for domain in array[:numDomains]:
+        try:
+            # Assume document exists in db; update array
+            GiselleDoc.get(id=domain) \
+                    .update(script='if(!ctx._source.'+stringName+'.contains(params.dateAndVersion)) {ctx._source.'+stringName+'.add(params.dateAndVersion)}', dateAndVersion=[date, version])
+        except Exception as e: # elasticsearch.exceptions.NotFoundError:
+            print(e)
+            # Create new document in db
+            myDoc = GiselleDoc(meta={'id':domain})
+            if(stringName == 'added'):
+                myDoc.added.append([date, version])
+            else:
+                myDoc.removed.append([date, version])
+            myDoc.save()
 
-        print(f'Writing {stringName} domains took {time.time() - savedTime} seconds.')
-    except Exception as e:
-        print(f'Database writes of {stringName} failed with error {e}')
-        raise SystemExit
+    print(f'Writing {stringName} domains took {time.time() - savedTime} seconds.')
+    # except Exception as e:
+    #     print(f'Database writes of {stringName} failed with error {e}')
+    #     raise SystemExit
 
 
 if __name__ == '__main__':
     initialTime = time.time()
 
     # For now, deal with fewer domains:
-    numDomains = None
+    numDomains = 100
 
     # Determine date to write to db
     date = datetime.date.today()
