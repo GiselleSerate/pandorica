@@ -65,18 +65,23 @@ def parseAndWrite(stringName, pattern, array, hasParen):
     savedTime = time.time()
     for domain in array[:numDomains]:
         try:
-            # Assume document exists in db; update array
-            GiselleDoc.get(id=domain) \
-                    .update(script='if(!ctx._source.'+stringName+'.contains(params.dateAndVersion)) {ctx._source.'+stringName+'.add(params.dateAndVersion)}', dateAndVersion=[date, version])
-        except Exception as e: # elasticsearch.exceptions.NotFoundError:
+            try:
+                # Assume document exists in db; update array
+                GiselleDoc.get(id=domain) \
+                        .update(script='if(!ctx._source.'+stringName+'.contains(params.dateAndVersion)) {ctx._source.'+stringName+'.add(params.dateAndVersion)}', dateAndVersion=[date, version])
+            except elasticsearch.exceptions.NotFoundError:
+                # Create new document in db
+                myDoc = GiselleDoc(meta={'id':domain})
+                if(stringName == 'added'):
+                    myDoc.added.append([date, version])
+                else:
+                    myDoc.removed.append([date, version])
+                myDoc.save()
+        # except socket.timeout:
+        except Exception as e:
+            print('No connection to database.')
             print(e)
-            # Create new document in db
-            myDoc = GiselleDoc(meta={'id':domain})
-            if(stringName == 'added'):
-                myDoc.added.append([date, version])
-            else:
-                myDoc.removed.append([date, version])
-            myDoc.save()
+            raise SystemExit
 
     print(f'Writing {stringName} domains took {time.time() - savedTime} seconds.')
     # except Exception as e:
@@ -88,10 +93,10 @@ if __name__ == '__main__':
     initialTime = time.time()
 
     # For now, deal with fewer domains:
-    numDomains = 100
+    numDomains = None
 
     # Determine date to write to db
-    date = datetime.date.today()
+    date = 'foo' + str(datetime.date.today()) # Avoiding my problems
 
     # Define regex so we can search for tags beginning with this
     addedPattern = re.compile(r'New Spyware DNS C2 Signatures')
@@ -113,7 +118,8 @@ if __name__ == '__main__':
 
     try:
         # Establish database connection (port 9200 by default)
-        connections.create_connection(host='34.235.226.40')
+        # connections.create_connection(host='34.235.226.40') # TODO actually, I'm not sure this can even fail. 
+        connections.create_connection(host='10.54.92.70') # TODO actually, I'm not sure this can even fail. 
         # connections.create_connection()
     except Exception as e:
         print(f'Connection failed to establish')
@@ -137,7 +143,11 @@ if __name__ == '__main__':
 
 
     # Start threads for adds and removes
-    threading.Thread(target=parseAndWrite, args=('added', addedPattern, added, False)).start()
-    threading.Thread(target=parseAndWrite, args=('removed', removedPattern, removed, True)).start()
+    addedThread = threading.Thread(target=parseAndWrite, args=('added', addedPattern, added, False))
+    addedThread.start()
+    removedThread = threading.Thread(target=parseAndWrite, args=('removed', removedPattern, removed, True))
+    removedThread.start()
 
+    addedThread.join()
+    removedThread.join()
     print(f'Finished running in {time.time()-initialTime} seconds.')
