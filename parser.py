@@ -10,7 +10,7 @@ import urllib.request
 
 
 # Class for writing back to the database
-class GiselleDoc(DocType):
+class Document(DocType):
     # Use domain as id
     id = Text(analyzer='snowball', fields={'raw': Keyword()})
     domain = Keyword()
@@ -18,7 +18,7 @@ class GiselleDoc(DocType):
     removed = Text(multi=True)
 
     class Index:
-        name = 'giselletest'
+        name = 'giselletest' # TODO update this
 
     @classmethod
     def get_indexable(cls):
@@ -34,7 +34,7 @@ class GiselleDoc(DocType):
             )
 
     def save(self, **kwargs):
-        return super(GiselleDoc, self).save(**kwargs)
+        return super(Document, self).save(**kwargs)
 
 
 def parseAndWrite(stringName, pattern, array, hasParen):
@@ -68,11 +68,11 @@ def parseAndWrite(stringName, pattern, array, hasParen):
         try:
             try:
                 # Assume document exists in db; update array
-                GiselleDoc.get(id=domain) \
+                Document.get(id=domain) \
                         .update(script='if(!ctx._source.'+stringName+'.contains(params.dateAndVersion)) {ctx._source.'+stringName+'.add(params.dateAndVersion)}', dateAndVersion=[date, version])
             except elasticsearch.exceptions.NotFoundError:
                 # Create new document in db
-                myDoc = GiselleDoc(meta={'id':domain})
+                myDoc = Document(meta={'id':domain})
                 myDoc.domain = domain
                 if(stringName == 'added'):
                     myDoc.added.append([date, version])
