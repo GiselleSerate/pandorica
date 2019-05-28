@@ -100,6 +100,9 @@ if __name__ == '__main__':
     addedPattern = re.compile(r'New Spyware DNS C2 Signatures')
     removedPattern = re.compile(r'Old Spyware DNS C2 Signatures')
 
+    # Define regex to verify version numbers
+    versionPattern = re.compile(r'^[0-9]+$')
+
     # Domains get stored here
     added = []
     removed = []
@@ -132,8 +135,10 @@ if __name__ == '__main__':
     try:
         # Get version number from title
         version = soup.find('title').string.split(' ')[1]
+        if not versionPattern.match(version):
+            raise Exception(f'Invalid version number scraped from file: {version}')
         print(f'Analyzing release notes for version {version}')
-    except: # TODO: I basically have a catch-all here, which I know is bad
+    except Exception as e:
         print('Could not find version number. Are you sure this HTML file is the right format?')
         print(e)
         # If we can't parse out domains, don't write to the db
