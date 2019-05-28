@@ -117,15 +117,10 @@ if __name__ == '__main__':
         raise SystemExit
 
 
-    try:
-        # Establish database connection (port 9200 by default)
-        # connections.create_connection(host='34.235.226.40') # TODO actually, I'm not sure this can even fail. 
-        connections.create_connection(host='10.54.92.70')
-        # connections.create_connection()
-    except Exception as e:
-        print(f'Connection failed to establish')
-        print(e)
-        raise SystemExit
+    # Establish database connection (port 9200 by default)
+    # connections.create_connection(host='34.235.226.40') # TODO actually, I'm not sure this can even fail. 
+    connections.create_connection(host='10.54.92.70')
+    # connections.create_connection()
 
 
     # Parse file
