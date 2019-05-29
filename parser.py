@@ -13,7 +13,7 @@ import config
 
 # Configuration
 app = Flask(__name__)
-app.config.from_object('config.DebugConfig')
+app.config.from_object('config.BreakingConfig')
 
 # Class for writing back to the database
 class Document(DocType):
@@ -24,7 +24,7 @@ class Document(DocType):
     removed = Text(multi=True)
 
     class Index:
-        name = app.config['DB_NAME'] # 'giselletest' # TODO update this
+        name = app.config['DB_NAME']
 
     @classmethod
     def get_indexable(cls):
@@ -94,17 +94,15 @@ def parseAndWrite(stringName, pattern, array, hasParen):
 
 
 if __name__ == '__main__':
-
+    # Time full program runtime
     initialTime = time.time()
 
     # Determine date to write to db
-    date = datetime.date.today()
+    date = datetime.date.today() if app.config['USE_CURR_DATE'] else app.config['ALT_DATE']
 
-    # Define regex so we can search for tags beginning with this
+    # Compile regexes for section headers and version number
     addedPattern = re.compile(app.config['ADD_REGEX'])
     removedPattern = re.compile(app.config['REM_REGEX'])
-
-    # Define regex to verify version numbers
     versionPattern = re.compile(app.config['VER_REGEX'])
 
     # Domains get stored here
@@ -115,19 +113,13 @@ if __name__ == '__main__':
     try:
         # Get HTML file to parse
         data = urllib.request.urlopen(app.config['FILE_URL'])
-        # data = open('./updates.html') # uncomment if you don't want to worry about hosting
+        # data = open('./updates.html') # TODO: uncomment if you don't want to worry about hosting
     except urllib.error.URLError:
         print('Updates not found. Have you started server.py in the same directory as the updates file?')
         raise SystemExit
 
-
-    # Establish database connection (port 9200 by default)
-    connections.create_connection(host=app.config['HOST_IP'])
-
-
     # Parse file
     soup = BeautifulSoup(data, 'html5lib')
-
 
     try:
         # Get version number from title
@@ -142,12 +134,15 @@ if __name__ == '__main__':
         raise SystemExit
 
 
+    # Establish database connection (port 9200 by default)
+    connections.create_connection(host=app.config['HOST_IP'])
+
+
     # Start threads for adds and removes
     addedThread = threading.Thread(target=parseAndWrite, args=('added', addedPattern, added, False))
     addedThread.start()
     removedThread = threading.Thread(target=parseAndWrite, args=('removed', removedPattern, removed, True))
     removedThread.start()
-
     addedThread.join()
     removedThread.join()
-    print(f'Finished running in {time.time()-initialTime} seconds.')
+    print(f'Finished running in {time.time() - initialTime} seconds.')
