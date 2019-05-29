@@ -15,8 +15,10 @@ import config
 app = Flask(__name__)
 app.config.from_object('config.BreakingConfig')
 
-# Class for writing back to the database
 class Document(DocType):
+    '''
+    Class for writing back to the database
+    '''
     # Use domain as id
     id = Text(analyzer='snowball', fields={'raw': Keyword()})
     domain = Keyword()
@@ -43,11 +45,14 @@ class Document(DocType):
         return super(Document, self).save(**kwargs)
 
 
-def parseAndWrite(stringName, pattern, array, hasParen):
+def parseAndWrite(stringName, pattern, array):
     '''
     Pulls all domains of one type from the soup
-    and then writes them to the database. 
-    Designed for threadiness. 
+    and then writes them to the database.
+    :param str stringName: The string representation of the type of docs
+    :param regex pattern: The section header pattern to find in the soup
+    :param list array: The array to put items in after they have been parsed
+
     '''
     # Pull out a list of tds from parse tree
     try:
@@ -58,7 +63,7 @@ def parseAndWrite(stringName, pattern, array, hasParen):
         # Get domains from table entries
         for td in tds:
             rawDomain = td.string
-            array.append(rawDomain.split(':')[1][:-1] if hasParen else rawDomain.split(':')[1])
+            array.append(rawDomain.split(':')[1][:-1] if stringName == 'removed' else rawDomain.split(':')[1])
 
         print(f'{len(array)} domains {stringName}, like {array[:3]}')
     except Exception as e:
@@ -68,9 +73,10 @@ def parseAndWrite(stringName, pattern, array, hasParen):
         raise SystemExit
 
     # Write domains of all relevant documents back to index
-    print(f'Writing {"all" if app.config["NUM_DOMAINS"] == None else app.config["NUM_DOMAINS"]} {stringName} domains to database . . .')
+    numDomains = "all" if app.config["NUM_DOMAINS"] == None else app.config["NUM_DOMAINS"]
+    print(f'Writing {numDomains} {stringName} domains to database . . .')
     savedTime = time.time()
-    for domain in array[:app.config["NUM_DOMAINS"]]:
+    for domain in array[:app.config['NUM_DOMAINS']]:
         try:
             try:
                 # Assume document exists in db; update array
@@ -110,8 +116,8 @@ if __name__ == '__main__':
     removed = []
 
 
+    # Get HTML file to parse
     try:
-        # Get HTML file to parse
         data = urllib.request.urlopen(app.config['FILE_URL'])
         # data = open('./updates.html') # TODO: uncomment if you don't want to worry about hosting
     except urllib.error.URLError:
@@ -121,8 +127,8 @@ if __name__ == '__main__':
     # Parse file
     soup = BeautifulSoup(data, 'html5lib')
 
+    # Get version number from title
     try:
-        # Get version number from title
         version = soup.find('title').string.split(' ')[1]
         if not versionPattern.match(version):
             raise Exception(f'Invalid version number scraped from file: {version}')
@@ -139,9 +145,9 @@ if __name__ == '__main__':
 
 
     # Start threads for adds and removes
-    addedThread = threading.Thread(target=parseAndWrite, args=('added', addedPattern, added, False))
+    addedThread = threading.Thread(target=parseAndWrite, args=('added', addedPattern, added))
     addedThread.start()
-    removedThread = threading.Thread(target=parseAndWrite, args=('removed', removedPattern, removed, True))
+    removedThread = threading.Thread(target=parseAndWrite, args=('removed', removedPattern, removed))
     removedThread.start()
     addedThread.join()
     removedThread.join()
