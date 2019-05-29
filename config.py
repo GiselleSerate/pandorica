@@ -11,7 +11,7 @@ class Config(object):
 
 class DebugConfig(Config):
     NUM_DOMAINS = 1000
-    HOST_IP = '10.54.92.70'
+    HOST_IP = '10.54.92.73'
 
 class BreakingConfig(Config):
     HOST_IP = 'abjc;aw'
