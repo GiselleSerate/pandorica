@@ -6,8 +6,14 @@ import time # for timing database writes
 from bs4 import BeautifulSoup
 import elasticsearch # for NotFoundError handling
 from elasticsearch_dsl import DocType, Keyword, Text, connections
+from flask import Flask
 import urllib.request
 
+import config
+
+# Configuration
+app = Flask(__name__)
+app.config.from_object('config.DebugConfig')
 
 # Class for writing back to the database
 class Document(DocType):
@@ -18,7 +24,7 @@ class Document(DocType):
     removed = Text(multi=True)
 
     class Index:
-        name = 'giselletest' # TODO update this
+        name = app.config['DB_NAME'] # 'giselletest' # TODO update this
 
     @classmethod
     def get_indexable(cls):
@@ -62,9 +68,9 @@ def parseAndWrite(stringName, pattern, array, hasParen):
         raise SystemExit
 
     # Write domains of all relevant documents back to index
-    print(f'Writing {"all" if numDomains == None else numDomains} {stringName} domains to database . . .')
+    print(f'Writing {"all" if app.config["NUM_DOMAINS"] == None else app.config["NUM_DOMAINS"]} {stringName} domains to database . . .')
     savedTime = time.time()
-    for domain in array[:numDomains]:
+    for domain in array[:app.config["NUM_DOMAINS"]]:
         try:
             try:
                 # Assume document exists in db; update array
@@ -88,20 +94,18 @@ def parseAndWrite(stringName, pattern, array, hasParen):
 
 
 if __name__ == '__main__':
-    initialTime = time.time()
 
-    # For now, deal with fewer domains:
-    numDomains = None
+    initialTime = time.time()
 
     # Determine date to write to db
     date = datetime.date.today()
 
     # Define regex so we can search for tags beginning with this
-    addedPattern = re.compile(r'New Spyware DNS C2 Signatures')
-    removedPattern = re.compile(r'Old Spyware DNS C2 Signatures')
+    addedPattern = re.compile(app.config['ADD_REGEX'])
+    removedPattern = re.compile(app.config['REM_REGEX'])
 
     # Define regex to verify version numbers
-    versionPattern = re.compile(r'^[0-9]+$')
+    versionPattern = re.compile(app.config['VER_REGEX'])
 
     # Domains get stored here
     added = []
@@ -110,7 +114,7 @@ if __name__ == '__main__':
 
     try:
         # Get HTML file to parse
-        data = urllib.request.urlopen('http://localhost:8020/updates.html')
+        data = urllib.request.urlopen(app.config['FILE_URL'])
         # data = open('./updates.html') # uncomment if you don't want to worry about hosting
     except urllib.error.URLError:
         print('Updates not found. Have you started server.py in the same directory as the updates file?')
@@ -118,9 +122,7 @@ if __name__ == '__main__':
 
 
     # Establish database connection (port 9200 by default)
-    # connections.create_connection(host='34.235.226.40') # TODO actually, I'm not sure this can even fail. 
-    connections.create_connection(host='10.54.92.70')
-    # connections.create_connection()
+    connections.create_connection(host=app.config['HOST_IP'])
 
 
     # Parse file
