@@ -62,7 +62,7 @@ def parseAndWrite(stringName, pattern, array, hasParen):
         raise SystemExit
 
     # Write domains of all relevant documents back to index
-    print(f'Writing {numDomains} {stringName} domains to database . . .')
+    print(f'Writing {"all" if numDomains == None else numDomains} {stringName} domains to database . . .')
     savedTime = time.time()
     for domain in array[:numDomains]:
         try:
