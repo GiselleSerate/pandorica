@@ -13,7 +13,7 @@ import config
 
 # Configuration
 app = Flask(__name__)
-app.config.from_object('config.BreakingConfig')
+app.config.from_object('config.DebugConfig')
 
 class Document(DocType):
     '''
