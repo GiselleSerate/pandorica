@@ -24,11 +24,15 @@ class Document(DocType):
     # Use domain as id
     id = Text(analyzer='snowball', fields={'raw': Keyword()})
     domain = Keyword()
-    added = Text(multi=True)
-    removed = Text(multi=True)
+    raw = Keyword()
+    header = Keyword()
+    threatType = Keyword()
+    threatClass = Keyword()
+    action = Text()
+    tags = Text(multi=True)
 
     class Index:
-        name = app.config['DB_NAME']
+        name = 'placeholder'
 
     @classmethod
     def get_indexable(cls):
@@ -64,8 +68,12 @@ def parseAndWrite(stringName, pattern, array, version):
 
         # Get domains from table entries
         for td in tds:
-            rawDomain = td.string
-            array.append(rawDomain.split(':')[1][:-1] if stringName == 'removed' else rawDomain.split(':')[1])
+            rawScrape = td.string
+            result = re.search('\((.*)\)', rawScrape) # Extract domains from "Suspicious DNS Query" parentheses
+            if result == None:
+                array.append(rawScrape)
+            else:
+                array.append(result.group(1))
 
         print(f'{len(array)} domains {stringName}, like {array[:3]}')
     except Exception as e:
@@ -78,16 +86,21 @@ def parseAndWrite(stringName, pattern, array, version):
     numDomains = "all" if app.config["NUM_DOMAINS"] == None else app.config["NUM_DOMAINS"]
     print(f'Writing {numDomains} {stringName} domains to database . . .')
     savedTime = time.time()
-    for domain in array[:app.config['NUM_DOMAINS']]:
+    for raw in array[:app.config['NUM_DOMAINS']]:
+        splitRaw = raw.split(':')
+        domain = splitRaw[1]
+        splitHeader = splitRaw[0].split('.')
+        # Create new document in db
+        myDoc = Document(meta={'id':domain})
+        myDoc.meta.index = version
+        myDoc.raw = raw
+        myDoc.header = splitRaw[0]
+        myDoc.threatType = splitHeader[0]
+        myDoc.threatClass = splitHeader[1] if len(splitHeader) > 1 else None
+        myDoc.domain = splitRaw[1]
+        myDoc.action = stringName
+
         try:
-            # Create new document in db
-            myDoc = Document(meta={'id':domain})
-            myDoc.meta.index = version
-            myDoc.domain = domain
-            if(stringName == 'added'):
-                myDoc.added.append([date, version])
-            else:
-                myDoc.removed.append([date, version])
             myDoc.save()
         except Exception as e:
             print('No connection to database.')
