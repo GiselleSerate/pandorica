@@ -5,7 +5,7 @@ import time # for timing database writes
 
 from bs4 import BeautifulSoup
 import elasticsearch # for NotFoundError handling
-from elasticsearch_dsl import DocType, Keyword, Text, connections
+from elasticsearch_dsl import DocType, Keyword, Text, connections, Index
 from flask import Flask
 import urllib.request
 
@@ -47,7 +47,7 @@ class Document(DocType):
         return super(Document, self).save(**kwargs)
 
 
-def parseAndWrite(stringName, pattern, array):
+def parseAndWrite(stringName, pattern, array, version):
     '''
     Pulls all domains of one type from the soup
     and then writes them to the database.
@@ -80,19 +80,15 @@ def parseAndWrite(stringName, pattern, array):
     savedTime = time.time()
     for domain in array[:app.config['NUM_DOMAINS']]:
         try:
-            try:
-                # Assume document exists in db; update array
-                Document.get(id=domain) \
-                        .update(script='if(!ctx._source.'+stringName+'.contains(params.dateAndVersion)) {ctx._source.'+stringName+'.add(params.dateAndVersion)}', dateAndVersion=[date, version])
-            except elasticsearch.exceptions.NotFoundError:
-                # Create new document in db
-                myDoc = Document(meta={'id':domain})
-                myDoc.domain = domain
-                if(stringName == 'added'):
-                    myDoc.added.append([date, version])
-                else:
-                    myDoc.removed.append([date, version])
-                myDoc.save()
+            # Create new document in db
+            myDoc = Document(meta={'id':domain})
+            myDoc.meta.index = version
+            myDoc.domain = domain
+            if(stringName == 'added'):
+                myDoc.added.append([date, version])
+            else:
+                myDoc.removed.append([date, version])
+            myDoc.save()
         except Exception as e:
             print('No connection to database.')
             print(e)
@@ -116,11 +112,10 @@ if __name__ == '__main__':
     # Domains get stored here
     added = []
     removed = []
-    
+
 
     username = app.config['USERNAME']
     password = app.config['PASSWORD']
-    # username, password, download_dir = content_downloader.get_config('../content_downloader/content_downloader.conf')
 
     # Create contentdownloader object to get AV release notes
     content_downloader = content_downloader.ContentDownloader(username=username, password=password, package='antivirus',
@@ -163,10 +158,15 @@ if __name__ == '__main__':
     connections.create_connection(host=app.config['HOST_IP'])
 
 
+    # Create new index
+    index = Index(version)
+    index.create()
+
+
     # Start threads for adds and removes
-    addedThread = threading.Thread(target=parseAndWrite, args=('added', addedPattern, added))
+    addedThread = threading.Thread(target=parseAndWrite, args=('added', addedPattern, added, version))
     addedThread.start()
-    removedThread = threading.Thread(target=parseAndWrite, args=('removed', removedPattern, removed))
+    removedThread = threading.Thread(target=parseAndWrite, args=('removed', removedPattern, removed, version))
     removedThread.start()
     addedThread.join()
     removedThread.join()
