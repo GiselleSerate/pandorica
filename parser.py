@@ -10,6 +10,9 @@ from flask import Flask
 import urllib.request
 
 import config
+import sys # TODO: only for the next line
+sys.path.append('../content_downloader') # TODO: this is Bad and I'm Sorry.
+import content_downloader
 
 # Configuration
 app = Flask(__name__)
@@ -116,13 +119,48 @@ if __name__ == '__main__':
     removed = []
 
 
+    # Create contentdownloader object to get AV release notes
+    content_downloader = content_downloader.ContentDownloader(username=app.config['USERNAME'], password=app.config['PASSWORD'], package='antivirus',
+                                           debug=False, isReleaseNotes=True)
+
+    # Check latest version. Login if necessary.
+    token, updates = content_downloader.check()
+
+    # Determine latest update
+    filename, foldername, latestversion = content_downloader.find_latest_update(updates)
+
+    # TODO: the following checks if we've done this before, but we don't care atm
+    # # Get previously downloaded versions from download directory
+    # downloaded_versions = []
+    # for f in os.listdir(download_dir):
+    #     downloaded_versions.append(f)
+
+    # # Check if already downloaded latest and do nothing
+    # if filename in downloaded_versions:
+    #     logging.debug("Already downloaded latest version: {0}".format(filename))
+    #     sys.exit(0)
+
+    # Get download URL
+    fileurl = content_downloader.get_download_link(token, filename, foldername)
+
     # Get HTML file to parse
     try:
-        data = urllib.request.urlopen(app.config['FILE_URL'])
+        data = urllib.request.urlopen(fileurl)
         # data = open('./updates.html') # TODO: uncomment if you don't want to worry about hosting
     except urllib.error.URLError:
-        print('Updates not found. Have you started server.py in the same directory as the updates file?')
+        print(f'Updates failed to download from {fileurl}')
         raise SystemExit
+
+    # TODO: I'm downloading it a different way
+    # # Download latest version to download directory
+    # logging.debug("Downloading latest version: %s" % latestversion)
+    # filename = content_downloader.download(download_dir, fileurl, filename)
+    # if filename is not None:
+    #     print("Finished downloading file: %s" % filename)
+    # else:
+    #     print("Unable to download latest content update")
+    #     raise SystemExit
+
 
     # Parse file
     soup = BeautifulSoup(data, 'html5lib')
