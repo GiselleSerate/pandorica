@@ -4,7 +4,7 @@ import threading
 import time # for timing database writes
 
 from bs4 import BeautifulSoup
-import elasticsearch # for NotFoundError handling
+from elasticsearch.exceptions import NotFoundError # TODO found this in safe networking code, use it or nuke this
 from elasticsearch_dsl import DocType, Keyword, Text, connections, Index
 from flask import Flask
 import urllib.request
