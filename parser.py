@@ -1,4 +1,5 @@
-import datetime
+from datetime import datetime
+import logging
 import re # regex for parsing
 import threading
 import time # for timing database writes
@@ -11,7 +12,7 @@ import urllib.request
 
 import sys # TODO: only for the next line
 sys.path.append('../content_downloader') # TODO: this is Bad and I'm Sorry.
-import content_downloader
+from content_downloader import ContentDownloader
 
 # Configuration
 app = Flask(__name__)
@@ -49,6 +50,21 @@ class Document(DocType):
 
     def save(self, **kwargs):
         return super(Document, self).save(**kwargs)
+
+
+class ContentDownloaderWithDate(ContentDownloader):
+    '''
+    Extend ContentDownloader to provide the update date
+    '''
+    def find_latest_update(self, updates):
+        '''
+        Extend function to additionally return update date
+        as its last argument
+        '''
+        updates_of_type = [u for u in updates if u['Key'] == self.key]
+        updates_sorted = sorted(updates_of_type, key=lambda x: datetime.strptime(x['ReleaseDate'], '%Y-%m-%dT%H:%M:%S'))
+        latest = updates_sorted[-1]
+        return latest[self.filename_string], latest['FolderName'], latest['VersionNumber'], latest['ReleaseDate']
 
 
 def parseAndWrite(stringName, pattern, array, version):
@@ -114,13 +130,9 @@ if __name__ == '__main__':
     # Time full program runtime
     initialTime = time.time()
 
-    # Determine date to write to db
-    date = datetime.date.today() if app.config['USE_CURR_DATE'] else app.config['ALT_DATE']
-
-    # Compile regexes for section headers and version number
+    # Compile regexes for section headers
     addedPattern = re.compile(app.config['ADD_REGEX'])
     removedPattern = re.compile(app.config['REM_REGEX'])
-    versionPattern = re.compile(app.config['VER_REGEX'])
 
     # Domains get stored here
     added = []
@@ -131,17 +143,20 @@ if __name__ == '__main__':
     password = app.config['PASSWORD']
 
     # Create contentdownloader object to get AV release notes
-    content_downloader = content_downloader.ContentDownloader(username=username, password=password, package='antivirus',
+    downloader = ContentDownloaderWithDate(username=username, password=password, package='antivirus',
                                            debug=False, isReleaseNotes=True)
 
     # Check latest version. Login if necessary.
-    token, updates = content_downloader.check()
+    token, updates = downloader.check()
 
     # Determine latest update
-    filename, foldername, latestversion = content_downloader.find_latest_update(updates)
+    filename, foldername, latestversion, date = downloader.find_latest_update(updates)
+
+    # version = 'foobar'
+    version = latestversion
 
     # Get download URL
-    fileurl = content_downloader.get_download_link(token, filename, foldername)
+    fileurl = downloader.get_download_link(token, filename, foldername)
 
     # Get HTML file to parse
     try:
@@ -154,22 +169,11 @@ if __name__ == '__main__':
     # Parse file
     soup = BeautifulSoup(data, 'html5lib')
 
-    # Get version number from title
-    try:
-        version = soup.find('title').string.split(' ')[1]
-        if not versionPattern.match(version):
-            raise Exception(f'Invalid version number scraped from file: {version}')
-        print(f'Analyzing release notes for version {version}')
-    except Exception as e:
-        print('Could not find version number. Are you sure this HTML file is the right format?')
-        print(e)
-        # If we can't parse out domains, don't write to the db
-        raise SystemExit
-
 
     # Establish database connection (port 9200 by default)
     connections.create_connection(host=app.config['HOST_IP'])
 
+    print(f'Writing updates for latest version: {version} (released {date}).')
 
     # Create new index
     index = Index(version)
