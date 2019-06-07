@@ -1,5 +1,4 @@
 from datetime import datetime
-import logging
 from logging.config import dictConfig
 import re # regex for parsing
 from threading import Thread
