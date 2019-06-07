@@ -1,7 +1,7 @@
 from datetime import datetime
 import logging
 import re # regex for parsing
-import threading
+from threading import Thread
 import time # for timing database writes
 
 from bs4 import BeautifulSoup
@@ -246,9 +246,9 @@ if __name__ == '__main__':
         raise SystemExit
 
     # Start threads for adds and removes
-    addedThread = threading.Thread(target=parseAndWrite, args=('added', addedPattern, added, version))
+    addedThread = Thread(target=parseAndWrite, args=('added', addedPattern, added, version))
     addedThread.start()
-    removedThread = threading.Thread(target=parseAndWrite, args=('removed', removedPattern, removed, version))
+    removedThread = Thread(target=parseAndWrite, args=('removed', removedPattern, removed, version))
     removedThread.start()
     addedThread.join()
     removedThread.join()
