@@ -5,7 +5,7 @@ import threading
 import time # for timing database writes
 
 from bs4 import BeautifulSoup
-from elasticsearch_dsl import DocType, Keyword, Text, Date, connections, Index, UpdateByQuery
+from elasticsearch_dsl import DocType, Keyword, Text, Boolean, Date, connections, Index, UpdateByQuery, Search
 from flask import Flask
 import urllib.request
 
@@ -22,7 +22,8 @@ class MetaDocument(DocType):
     Unique class for writing metadata to an index
     '''
     id = Text(analyzer='snowball', fields={'raw': Keyword()})
-    complete = Bool() # TODO is bool a thing? idk??
+    metadoc = Text()
+    complete = Boolean() # TODO is bool a thing? idk??
     version = Text()
     date = Date() # TODO is date a thing? idkkk??? probably because I've had problems with it
 
@@ -37,13 +38,14 @@ class MetaDocument(DocType):
     def from_obj(cls, obj):
         return cls(
             id=obj.id,
+            metadoc=obj.metadoc,
             complete=obj.complete,
             version=obj.version,
             date=obj.date,
             )
 
     def save(self, **kwargs):
-        return super(DomainDocument, self).save(**kwargs)
+        return super(MetaDocument, self).save(**kwargs)
 
 class DomainDocument(DocType):
     '''
@@ -209,18 +211,22 @@ if __name__ == '__main__':
 
     # Stop if we've written this fully before; delete if it was a partial write
     try:
-        if es.indices.exists(index=version):
+        # if es.indices.exists(index=version): # TODO attempt something else lol
+        if index.exists():
             # Search for metadoc complete
-            completed = search(STUFFF) # TODO well not this
+            metaSearch = Search().query('match', metadoc=True) # TODO verify this hey?
+            completed = metaSearch.execute()
             if completed:
                 print('This version has already been written to the database. Stopping.')
                 raise SystemExit
             else:
                 # Last write was incomplete; delete the index and start over
+                print('Clearing index.')
                 index.delete()
     except Exception as e:
         print('OOPSIES we have a problem with the existing index stop pls') # TODO idk what could happen??
         print(e)
+        raise SystemExit
 
     # Create new index
     index.create()
@@ -228,6 +234,7 @@ if __name__ == '__main__':
     # Create new MetaDocument in db
     myDoc = MetaDocument()
     myDoc.meta.index = version
+    myDoc.metadoc = True
     myDoc.complete = False
     myDoc.version = version
     myDoc.date = date
