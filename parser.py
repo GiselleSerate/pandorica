@@ -166,7 +166,7 @@ def parseAndWrite(stringName, pattern, array, version):
         try:
             myDoc.save()
         except Exception as e:
-            app.logger.error('No connection to database.')
+            app.logger.error('Saving domain failed; check connection to database and retry.')
             app.logger.error(e)
             raise SystemExit
 
@@ -258,7 +258,7 @@ if __name__ == '__main__':
     try:
         myDoc.save()
     except Exception as e:
-        app.logger.error('No connection to database.')
+        app.logger.error('Saving metadocument failed; check connection to database and retry.')
         app.logger.error(e)
         raise SystemExit
 
@@ -277,7 +277,7 @@ if __name__ == '__main__':
               .script(source="ctx._source.complete=true", lang="painless")
         response = ubq.execute()
     except Exception as e:
-        app.logger.error('Can\'t commit')
+        app.logger.error('Can\'t commit to database')
         app.logger.error(e)
         raise SystemExit
 
