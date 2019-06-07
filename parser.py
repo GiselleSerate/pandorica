@@ -1,11 +1,11 @@
 from datetime import datetime
 from logging.config import dictConfig
-import re # regex for parsing
+import re
 from threading import Thread
 import time # for timing database writes
 
 from bs4 import BeautifulSoup
-from elasticsearch_dsl import DocType, Keyword, Text, Boolean, Date, connections, Index, UpdateByQuery, Search
+from elasticsearch_dsl import DocType, Boolean, Date, Keyword, Text, connections, Index, Search, UpdateByQuery
 from flask import Flask
 from flask.logging import default_handler
 import urllib.request
