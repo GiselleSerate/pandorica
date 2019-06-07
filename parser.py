@@ -5,8 +5,7 @@ import threading
 import time # for timing database writes
 
 from bs4 import BeautifulSoup
-from elasticsearch.exceptions import NotFoundError # TODO found this in safe networking code, use it or nuke this
-from elasticsearch_dsl import DocType, Keyword, Text, Bool, Date connections, Index
+from elasticsearch_dsl import DocType, Keyword, Text, Date, connections, Index, UpdateByQuery
 from flask import Flask
 import urllib.request
 
@@ -18,7 +17,7 @@ from content_downloader import ContentDownloader
 app = Flask(__name__)
 app.config.from_object('config.DebugConfig')
 
-class MetaDocument(DocType): # TODO hi. call this somewhere. 
+class MetaDocument(DocType):
     '''
     Unique class for writing metadata to an index
     '''
@@ -205,10 +204,39 @@ if __name__ == '__main__':
 
     print(f'Writing updates for latest version: {version} (released {date}).')
 
-    # Create new index
+    # Establish index to write to
     index = Index(version)
+
+    # Stop if we've written this fully before; delete if it was a partial write
+    try:
+        if es.indices.exists(index=version):
+            # Search for metadoc complete
+            completed = search(STUFFF) # TODO well not this
+            if completed:
+                print('This version has already been written to the database. Stopping.')
+                raise SystemExit
+            else:
+                # Last write was incomplete; delete the index and start over
+                index.delete()
+    except Exception as e:
+        print('OOPSIES we have a problem with the existing index stop pls') # TODO idk what could happen??
+        print(e)
+
+    # Create new index
     index.create()
 
+    # Create new MetaDocument in db
+    myDoc = MetaDocument()
+    myDoc.meta.index = version
+    myDoc.complete = False
+    myDoc.version = version
+    myDoc.date = date
+    try:
+        myDoc.save()
+    except Exception as e:
+        print('No connection to database.')
+        print(e)
+        raise SystemExit
 
     # Start threads for adds and removes
     addedThread = threading.Thread(target=parseAndWrite, args=('added', addedPattern, added, version))
@@ -217,4 +245,11 @@ if __name__ == '__main__':
     removedThread.start()
     addedThread.join()
     removedThread.join()
+
+    # Finish by committing
+    ubq = UpdateByQuery(index=version)      \
+          .query("match", complete=False)   \
+          .script(source="ctx._source.completed=true", lang="painless")
+    response = ubq.execute()
+
     print(f'Finished running in {time.time() - initialTime} seconds.')
