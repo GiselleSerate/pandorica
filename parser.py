@@ -6,7 +6,7 @@ import time # for timing database writes
 
 from bs4 import BeautifulSoup
 from elasticsearch.exceptions import NotFoundError # TODO found this in safe networking code, use it or nuke this
-from elasticsearch_dsl import DocType, Keyword, Text, connections, Index
+from elasticsearch_dsl import DocType, Keyword, Text, Bool, Date connections, Index
 from flask import Flask
 import urllib.request
 
@@ -18,9 +18,37 @@ from content_downloader import ContentDownloader
 app = Flask(__name__)
 app.config.from_object('config.DebugConfig')
 
-class Document(DocType):
+class MetaDocument(DocType): # TODO hi. call this somewhere. 
     '''
-    Class for writing back to the database
+    Unique class for writing metadata to an index
+    '''
+    id = Text(analyzer='snowball', fields={'raw': Keyword()})
+    complete = Bool() # TODO is bool a thing? idk??
+    version = Text()
+    date = Date() # TODO is date a thing? idkkk??? probably because I've had problems with it
+
+    class Index:
+        name = 'placeholder'
+
+    @classmethod
+    def get_indexable(cls):
+        return cls.get_model().get_objects()
+
+    @classmethod
+    def from_obj(cls, obj):
+        return cls(
+            id=obj.id,
+            complete=obj.complete,
+            version=obj.version,
+            date=obj.date,
+            )
+
+    def save(self, **kwargs):
+        return super(DomainDocument, self).save(**kwargs)
+
+class DomainDocument(DocType):
+    '''
+    Class for writing domains back to the database
     '''
     # Use domain as id
     id = Text(analyzer='snowball', fields={'raw': Keyword()})
@@ -49,7 +77,7 @@ class Document(DocType):
             )
 
     def save(self, **kwargs):
-        return super(Document, self).save(**kwargs)
+        return super(DomainDocument, self).save(**kwargs)
 
 
 class ContentDownloaderWithDate(ContentDownloader):
@@ -106,8 +134,8 @@ def parseAndWrite(stringName, pattern, array, version):
         splitRaw = raw.split(':')
         domain = splitRaw[1]
         splitHeader = splitRaw[0].split('.')
-        # Create new document in db
-        myDoc = Document(meta={'id':domain})
+        # Create new DomainDocument in db
+        myDoc = DomainDocument(meta={'id':domain})
         myDoc.meta.index = version
         myDoc.raw = raw
         myDoc.header = splitRaw[0]
