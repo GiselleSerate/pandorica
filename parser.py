@@ -1,5 +1,6 @@
 from datetime import datetime
 import logging
+from logging.config import dictConfig
 import re # regex for parsing
 from threading import Thread
 import time # for timing database writes
@@ -7,15 +8,33 @@ import time # for timing database writes
 from bs4 import BeautifulSoup
 from elasticsearch_dsl import DocType, Keyword, Text, Boolean, Date, connections, Index, UpdateByQuery, Search
 from flask import Flask
+from flask.logging import default_handler
 import urllib.request
 
 import sys # TODO: only for the next line
 sys.path.append('../content_downloader') # TODO: this is Bad and I'm Sorry.
 from content_downloader import ContentDownloader
 
+dictConfig({
+    'version': 1,
+    'formatters': {'default': {
+        'format': '[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
+    }},
+    'handlers': {'wsgi': {
+        'class': 'logging.StreamHandler',
+        'stream': 'ext://flask.logging.wsgi_errors_stream',
+        'formatter': 'default'
+    }},
+    'root': {
+        'level': 'INFO',
+        'handlers': ['wsgi']
+    }
+})
+
 # Configuration
 app = Flask(__name__)
 app.config.from_object('config.DebugConfig')
+app.logger.removeHandler(default_handler)
 
 class MetaDocument(DocType):
     '''
@@ -23,9 +42,9 @@ class MetaDocument(DocType):
     '''
     id = Text(analyzer='snowball', fields={'raw': Keyword()})
     metadoc = Text()
-    complete = Boolean() # TODO is bool a thing? idk??
+    complete = Boolean()
     version = Text()
-    date = Date() # TODO is date a thing? idkkk??? probably because I've had problems with it
+    date = Date()
 
     class Index:
         name = 'placeholder'
@@ -120,16 +139,16 @@ def parseAndWrite(stringName, pattern, array, version):
             else:
                 array.append(result.group(1))
 
-        print(f'{len(array)} domains {stringName}, like {array[:3]}')
+        app.logger.info(f'{len(array)} domains {stringName}, like {array[:3]}')
     except Exception as e:
-        print(f'Parse of {stringName} failed. Are you sure this HTML file is the right format?')
-        print(e)
+        app.logger.error(f'Parse of {stringName} failed. Are you sure this HTML file is the right format?')
+        app.logger.error(e)
         # If we can't parse out domains, don't write to the db
         raise SystemExit
 
     # Write domains of all relevant documents back to index
     numDomains = "all" if app.config["NUM_DOMAINS"] == None else app.config["NUM_DOMAINS"]
-    print(f'Writing {numDomains} {stringName} domains to database . . .')
+    app.logger.info(f'Writing {numDomains} {stringName} domains to database . . .')
     savedTime = time.time()
     for raw in array[:app.config['NUM_DOMAINS']]:
         splitRaw = raw.split(':')
@@ -148,11 +167,11 @@ def parseAndWrite(stringName, pattern, array, version):
         try:
             myDoc.save()
         except Exception as e:
-            print('No connection to database.')
-            print(e)
+            app.logger.error('No connection to database.')
+            app.logger.error(e)
             raise SystemExit
 
-    print(f'Writing {stringName} domains took {time.time() - savedTime} seconds.')
+    app.logger.info(f'Writing {stringName} domains took {time.time() - savedTime} seconds.')
 
 
 if __name__ == '__main__':
@@ -168,7 +187,7 @@ if __name__ == '__main__':
     removed = []
 
 
-    print(f'Retrieving latest release notes from support portal . . .')
+    app.logger.info(f'Retrieving latest release notes from support portal . . .')
 
     username = app.config['USERNAME']
     password = app.config['PASSWORD']
@@ -193,7 +212,7 @@ if __name__ == '__main__':
     try:
         data = urllib.request.urlopen(fileurl)
     except urllib.error.URLError:
-        print(f'Updates failed to download from {fileurl}')
+        app.logger.error(f'Updates failed to download from {fileurl}')
         raise SystemExit
 
 
@@ -204,28 +223,27 @@ if __name__ == '__main__':
     # Establish database connection (port 9200 by default)
     connections.create_connection(host=app.config['HOST_IP'])
 
-    print(f'Writing updates for latest version: {version} (released {date}).')
+    app.logger.info(f'Writing updates for latest version: {version} (released {date}).')
 
     # Establish index to write to
     index = Index(version)
 
     # Stop if we've written this fully before; delete if it was a partial write
     try:
-        # if es.indices.exists(index=version): # TODO attempt something else lol
         if index.exists():
             # Search for metadoc complete
-            metaSearch = Search().query('match', metadoc=True) # TODO verify this hey?
+            metaSearch = Search().query('match', metadoc=True)
             completed = metaSearch.execute()
             if completed:
-                print('This version has already been written to the database. Stopping.')
+                app.logger.info('This version has already been written to the database. Stopping.')
                 raise SystemExit
             else:
                 # Last write was incomplete; delete the index and start over
-                print('Clearing index.')
+                app.logger.info('Clearing index.')
                 index.delete()
     except Exception as e:
-        print('OOPSIES we have a problem with the existing index stop pls') # TODO idk what could happen??
-        print(e)
+        app.logger.error('OOPSIES we have a problem with the existing index stop pls') # TODO idk what could happen??
+        app.logger.error(e)
         raise SystemExit
 
     # Create new index
@@ -241,8 +259,8 @@ if __name__ == '__main__':
     try:
         myDoc.save()
     except Exception as e:
-        print('No connection to database.')
-        print(e)
+        app.logger.error('No connection to database.')
+        app.logger.error(e)
         raise SystemExit
 
     # Start threads for adds and removes
@@ -260,8 +278,8 @@ if __name__ == '__main__':
               .script(source="ctx._source.complete=true", lang="painless")
         response = ubq.execute()
     except Exception as e:
-        print('Can\'t commit')
-        print(e)
+        app.logger.error('Can\'t commit')
+        app.logger.error(e)
         raise SystemExit
 
-    print(f'Finished running in {time.time() - initialTime} seconds.')
+    app.logger.info(f'Finished running in {time.time() - initialTime} seconds.')
