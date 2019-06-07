@@ -253,10 +253,15 @@ if __name__ == '__main__':
     addedThread.join()
     removedThread.join()
 
-    # Finish by committing
-    ubq = UpdateByQuery(index=version)      \
-          .query("match", complete=False)   \
-          .script(source="ctx._source.completed=true", lang="painless")
-    response = ubq.execute()
+    try:
+        # Finish by committing
+        ubq = UpdateByQuery(index=version)      \
+              .query("match", metadoc=True)   \
+              .script(source="ctx._source.complete=true", lang="painless")
+        response = ubq.execute()
+    except Exception as e:
+        print('Can\'t commit')
+        print(e)
+        raise SystemExit
 
     print(f'Finished running in {time.time() - initialTime} seconds.')
