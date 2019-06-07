@@ -139,6 +139,8 @@ if __name__ == '__main__':
     removed = []
 
 
+    print(f'Retrieving latest release notes from support portal . . .')
+
     username = app.config['USERNAME']
     password = app.config['PASSWORD']
 
