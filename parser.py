@@ -114,7 +114,7 @@ class ContentDownloaderWithDate(ContentDownloader):
         return latest[self.filename_string], latest['FolderName'], latest['VersionNumber'], latest['ReleaseDate']
 
 
-def parseAndWrite(stringName, pattern, array, version):
+def parseAndWrite(stringName, pattern, array, version, threadStatus):
     '''
     Pulls all domains of one type from the soup
     and then writes them to the database.
@@ -171,6 +171,7 @@ def parseAndWrite(stringName, pattern, array, version):
             raise SystemExit
 
     app.logger.info(f'Writing {stringName} domains took {time.time() - savedTime} seconds.')
+    threadStatus.append(True)
 
 
 if __name__ == '__main__':
@@ -262,23 +263,31 @@ if __name__ == '__main__':
         app.logger.error(e)
         raise SystemExit
 
+
+    # Status gets stored here
+    threadStatus = []
+
     # Start threads for adds and removes
-    addedThread = Thread(target=parseAndWrite, args=('added', addedPattern, added, version))
+    addedThread = Thread(target=parseAndWrite, args=('added', addedPattern, added, version, threadStatus))
     addedThread.start()
-    removedThread = Thread(target=parseAndWrite, args=('removed', removedPattern, removed, version))
+    removedThread = Thread(target=parseAndWrite, args=('removed', removedPattern, removed, version, threadStatus))
     removedThread.start()
     addedThread.join()
     removedThread.join()
 
-    try:
-        # Finish by committing
-        ubq = UpdateByQuery(index=version)      \
-              .query("match", metadoc=True)   \
-              .script(source="ctx._source.complete=true", lang="painless")
-        response = ubq.execute()
-    except Exception as e:
-        app.logger.error('Can\'t commit to database')
-        app.logger.error(e)
-        raise SystemExit
+    if(len(threadStatus) == 2):
+        # TODO make sure both threads are okay before committinggg!
+        try:
+            # Finish by committing
+            ubq = UpdateByQuery(index=version)      \
+                  .query("match", metadoc=True)   \
+                  .script(source="ctx._source.complete=true", lang="painless")
+            response = ubq.execute()
+        except Exception as e:
+            app.logger.error('Can\'t commit to database')
+            app.logger.error(e)
+            raise SystemExit
 
-    app.logger.info(f'Finished running in {time.time() - initialTime} seconds.')
+        app.logger.info(f'Finished running in {time.time() - initialTime} seconds.')
+    else:
+        app.logger.info(f'Incomplete run. Please retry.')
