@@ -171,7 +171,7 @@ def parseAndWrite(stringName, pattern, array, version, threadStatus):
             raise SystemExit
 
     app.logger.info(f'Writing {stringName} domains took {time.time() - savedTime} seconds.')
-    threadStatus.append(True)
+    threadStatus.append(stringName)
 
 
 if __name__ == '__main__':
