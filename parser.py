@@ -146,7 +146,7 @@ def parseAndWrite(stringName, pattern, array, version, threadStatus):
         app.logger.error(f'Parse of {stringName} failed. Are you sure this HTML file is the right format?')
         app.logger.error(e)
         # If we can't parse out domains, don't write to the db; suggests a fundamental document 
-        # format change requiring more maintenance than a simple retry
+        # format change requiring more maintenance than a simple retry. Get a human to look at this. 
         sys.exit(2)
 
     # Write domains of all relevant documents back to index
@@ -178,7 +178,10 @@ def parseAndWrite(stringName, pattern, array, version, threadStatus):
     threadStatus.append(stringName)
 
 
-if __name__ == '__main__':
+def runParser():
+    '''
+    Download file from support portal, parse, and write to database. 
+    '''
     # Time full program runtime
     initialTime = time.time()
 
@@ -292,6 +295,10 @@ if __name__ == '__main__':
         except Exception as e:
             app.logger.error('Failed to tell database that index was complete. Retry.')
             app.logger.error(e)
-            sys.exit(1)
+            sys.exit(1) # Retry immediately
 
         app.logger.info(f'Finished running in {time.time() - initialTime} seconds.')
+
+
+if __name__ == '__main__':
+    runParser()
