@@ -121,6 +121,8 @@ def parseAndWrite(stringName, pattern, array, version, threadStatus):
     :param str stringName: The string representation of the type of docs
     :param regex pattern: The section header pattern to find in the soup
     :param list array: The array to put items in after they have been parsed
+    :param string version: The update version (also the index to write to)
+    :param list threadStatus: A list to write to on proper return
 
     '''
     # Pull out a list of tds from parse tree
@@ -242,7 +244,7 @@ if __name__ == '__main__':
                 app.logger.info('Clearing index.')
                 index.delete()
     except Exception as e:
-        app.logger.error('OOPSIES we have a problem with the existing index stop pls') # TODO idk what could happen??
+        app.logger.error('Issue with the existing index. Try manually deleting the index and retry.')
         app.logger.error(e)
         raise SystemExit
 
@@ -275,19 +277,19 @@ if __name__ == '__main__':
     addedThread.join()
     removedThread.join()
 
-    if(len(threadStatus) == 2):
-        # TODO make sure both threads are okay before committinggg!
+    # Make sure both threads are okay before committing
+    if(len(threadStatus) < 2):
+        app.logger.error(f'Incomplete run. Please retry. Only wrote {threadStatus} to the database.')
+    else:
         try:
             # Finish by committing
             ubq = UpdateByQuery(index=version)      \
-                  .query("match", metadoc=True)   \
+                  .query("match", metadoc=True)     \
                   .script(source="ctx._source.complete=true", lang="painless")
             response = ubq.execute()
         except Exception as e:
-            app.logger.error('Can\'t commit to database')
+            app.logger.error('Failed to tell database that index was complete. Retry.')
             app.logger.error(e)
             raise SystemExit
 
         app.logger.info(f'Finished running in {time.time() - initialTime} seconds.')
-    else:
-        app.logger.info(f'Incomplete run. Please retry.')
