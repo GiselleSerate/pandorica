@@ -194,7 +194,6 @@ def runParser():
     '''
     Download file from support portal, parse, and write to database. 
     '''
-    raise RetryException
     # Time full program runtime
     initialTime = time.time()
 
@@ -314,17 +313,20 @@ def runParser():
 
 
 def tryParse():
-    retCode = None
-    while retCode != 0:
+    retry = True
+    while retry:
+        retry = False
         try:
             runParser()
         except RetryException:
             app.logger.error('Script failed, retrying.')
+            retry = True
         except MaintenanceException:
-            app.logger.error('Script may need maintenance. Find the programmer.')
+            app.logger.error('Script may need maintenance. Find the programmer. Stopping.')
+            # TODO panic
         except Exception as e:
-            print('Uncaught exception.')
-            print(e)
+            app.logger.error('Uncaught exception from runParser. Stopping.')
+            app.logger.error(e)
 
 if __name__ == '__main__':
     tryParse()
