@@ -1,6 +1,7 @@
 from datetime import datetime
 from logging.config import dictConfig
 import re
+import sys
 from threading import Thread
 import time # for timing database writes
 
@@ -144,8 +145,9 @@ def parseAndWrite(stringName, pattern, array, version, threadStatus):
     except Exception as e:
         app.logger.error(f'Parse of {stringName} failed. Are you sure this HTML file is the right format?')
         app.logger.error(e)
-        # If we can't parse out domains, don't write to the db
-        raise SystemExit
+        # If we can't parse out domains, don't write to the db; suggests a fundamental document 
+        # format change requiring more maintenance than a simple retry
+        sys.exit(2)
 
     # Write domains of all relevant documents back to index
     numDomains = "all" if app.config["NUM_DOMAINS"] == None else app.config["NUM_DOMAINS"]
@@ -170,7 +172,7 @@ def parseAndWrite(stringName, pattern, array, version, threadStatus):
         except Exception as e:
             app.logger.error('Saving domain failed; check connection to database and retry.')
             app.logger.error(e)
-            raise SystemExit
+            sys.exit(1) # Retry immediately
 
     app.logger.info(f'Writing {stringName} domains took {time.time() - savedTime} seconds.')
     threadStatus.append(stringName)
@@ -215,7 +217,7 @@ if __name__ == '__main__':
         data = urllib.request.urlopen(fileurl)
     except urllib.error.URLError:
         app.logger.error(f'Updates failed to download from {fileurl}')
-        raise SystemExit
+        sys.exit(1) # Retry immediately
 
 
     # Parse file
@@ -238,15 +240,15 @@ if __name__ == '__main__':
             completed = metaSearch.execute()
             if completed:
                 app.logger.info('This version has already been written to the database. Stopping.')
-                raise SystemExit
+                sys.exit(0) # Everything's fine, no need to retry
             else:
                 # Last write was incomplete; delete the index and start over
                 app.logger.info('Clearing index.')
                 index.delete()
     except Exception as e:
-        app.logger.error('Issue with the existing index. Try manually deleting the index and retry.')
+        app.logger.error('Issue with the existing index. Try checking your connection or manually deleting the index and retry.')
         app.logger.error(e)
-        raise SystemExit
+        sys.exit(1) # Retry immediately
 
     # Create new index
     index.create()
@@ -263,7 +265,7 @@ if __name__ == '__main__':
     except Exception as e:
         app.logger.error('Saving metadocument failed; check connection to database and retry.')
         app.logger.error(e)
-        raise SystemExit
+        sys.exit(1) # Retry immediately
 
 
     # Status gets stored here
@@ -290,6 +292,6 @@ if __name__ == '__main__':
         except Exception as e:
             app.logger.error('Failed to tell database that index was complete. Retry.')
             app.logger.error(e)
-            raise SystemExit
+            sys.exit(1)
 
         app.logger.info(f'Finished running in {time.time() - initialTime} seconds.')
