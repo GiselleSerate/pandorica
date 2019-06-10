@@ -36,6 +36,18 @@ app = Flask(__name__)
 app.config.from_object('config.DebugConfig')
 app.logger.removeHandler(default_handler)
 
+class RetryException(Exception):
+    '''
+    Raised when the action should be retried
+    '''
+    pass
+
+class MaintenanceException(Exception):
+    '''
+    Raised when the script may be now obsolete due to format changes, etc
+    '''
+    pass
+
 class MetaDocument(DocType):
     '''
     Unique class for writing metadata to an index
@@ -147,7 +159,7 @@ def parseAndWrite(stringName, pattern, array, version, threadStatus):
         app.logger.error(e)
         # If we can't parse out domains, don't write to the db; suggests a fundamental document 
         # format change requiring more maintenance than a simple retry. Get a human to look at this. 
-        sys.exit(2)
+        raise MaintenanceException
 
     # Write domains of all relevant documents back to index
     numDomains = "all" if app.config["NUM_DOMAINS"] == None else app.config["NUM_DOMAINS"]
@@ -172,7 +184,7 @@ def parseAndWrite(stringName, pattern, array, version, threadStatus):
         except Exception as e:
             app.logger.error('Saving domain failed; check connection to database and retry.')
             app.logger.error(e)
-            sys.exit(1) # Retry immediately
+            raise RetryException # Retry immediately
 
     app.logger.info(f'Writing {stringName} domains took {time.time() - savedTime} seconds.')
     threadStatus.append(stringName)
@@ -182,6 +194,7 @@ def runParser():
     '''
     Download file from support portal, parse, and write to database. 
     '''
+    raise RetryException
     # Time full program runtime
     initialTime = time.time()
 
@@ -220,7 +233,7 @@ def runParser():
         data = urllib.request.urlopen(fileurl)
     except urllib.error.URLError:
         app.logger.error(f'Updates failed to download from {fileurl}')
-        sys.exit(1) # Retry immediately
+        raise RetryException # Retry immediately
 
 
     # Parse file
@@ -251,7 +264,7 @@ def runParser():
     except Exception as e:
         app.logger.error('Issue with the existing index. Try checking your connection or manually deleting the index and retry.')
         app.logger.error(e)
-        sys.exit(1) # Retry immediately
+        raise RetryException # Retry immediately
 
     # Create new index
     index.create()
@@ -268,7 +281,7 @@ def runParser():
     except Exception as e:
         app.logger.error('Saving metadocument failed; check connection to database and retry.')
         app.logger.error(e)
-        sys.exit(1) # Retry immediately
+        raise RetryException # Retry immediately
 
 
     # Status gets stored here
@@ -295,10 +308,23 @@ def runParser():
         except Exception as e:
             app.logger.error('Failed to tell database that index was complete. Retry.')
             app.logger.error(e)
-            sys.exit(1) # Retry immediately
+            raise RetryException # Retry immediately
 
         app.logger.info(f'Finished running in {time.time() - initialTime} seconds.')
 
 
+def tryParse():
+    retCode = None
+    while retCode != 0:
+        try:
+            runParser()
+        except RetryException:
+            app.logger.error('Script failed, retrying.')
+        except MaintenanceException:
+            app.logger.error('Script may need maintenance. Find the programmer.')
+        except Exception as e:
+            print('Uncaught exception.')
+            print(e)
+
 if __name__ == '__main__':
-    runParser()
+    tryParse()
