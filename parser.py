@@ -313,13 +313,15 @@ def runParser():
 
 
 def tryParse():
+    retriesLeft = 10
     retry = True
-    while retry:
+    while retry and retriesLeft > 0:
         retry = False
+        retriesLeft -= 1
         try:
             runParser()
         except RetryException:
-            app.logger.error('Script failed, retrying.')
+            app.logger.error('Script failed, retrying.') # TODO limit retries. maybe refactor this bit. 
             retry = True
         except MaintenanceException:
             app.logger.error('Script may need maintenance. Find the programmer. Stopping.')
