@@ -127,7 +127,7 @@ class ContentDownloaderWithDate(ContentDownloader):
         return latest[self.filename_string], latest['FolderName'], latest['VersionNumber'], latest['ReleaseDate']
 
 
-def parseAndWrite(stringName, pattern, array, version, threadStatus):
+def parseAndWrite(soup, stringName, pattern, array, version, threadStatus):
     '''
     Pulls all domains of one type from the soup
     and then writes them to the database.
@@ -287,9 +287,9 @@ def runParser():
     threadStatus = []
 
     # Start threads for adds and removes
-    addedThread = Thread(target=parseAndWrite, args=('added', addedPattern, added, version, threadStatus))
+    addedThread = Thread(target=parseAndWrite, args=(soup, 'added', addedPattern, added, version, threadStatus))
     addedThread.start()
-    removedThread = Thread(target=parseAndWrite, args=('removed', removedPattern, removed, version, threadStatus))
+    removedThread = Thread(target=parseAndWrite, args=(soup, 'removed', removedPattern, removed, version, threadStatus))
     removedThread.start()
     addedThread.join()
     removedThread.join()
