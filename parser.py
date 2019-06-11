@@ -237,7 +237,7 @@ def processIndex(version):
     Use AF to process parsed domains
     '''
     if(version == None):
-        print('{} is not a valid version number. Stopping.')
+        print(f'{version} is not a valid version number. Stopping.')
         return
 
     # Search for non-processed and non-generic
@@ -255,7 +255,7 @@ def processIndex(version):
         it = pool.imap(partial(processHit, version=version), newNonGenericSearch.scan())
         # Write IPs of all matching documents back to test index
         while True:
-            print(f'{dayAfReqsLeft} AutoFocus requests left today.')
+            print(f'~{dayAfReqsLeft} AutoFocus requests left today.')
             if(dayAfReqsLeft < 1):
                 return # Nothing more to do today. 
             try:
