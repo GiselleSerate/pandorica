@@ -5,7 +5,7 @@ from multiprocessing import Pool
 import re
 import sys
 from threading import Thread
-from time import time, sleep
+from time import sleep
 
 from bs4 import BeautifulSoup
 from elasticsearch_dsl import DocType, Boolean, Date, Keyword, Text, connections, Index, Search, UpdateByQuery
@@ -20,6 +20,8 @@ from content_downloader import ContentDownloader
 sys.path.append('../safe-networking') # TODO: this is Bad and I'm Sorry.
 from project.dns.dnsutils import updateAfStats, getDomainDoc
 from project.dns.dns import DomainDetailsDoc, TagDetailsDoc
+
+version = None
 
 dictConfig({
     'version': 1,
@@ -175,7 +177,6 @@ def parseAndWrite(soup, stringName, pattern, array, version, threadStatus):
 
     # Write domains of all relevant documents back to index
     print(f'Writing {stringName} domains to database . . .')
-    savedTime = time()
     for raw in array:
         splitRaw = raw.split(':')
         domain = splitRaw[1]
@@ -198,19 +199,23 @@ def parseAndWrite(soup, stringName, pattern, array, version, threadStatus):
             print(e)
             raise RetryException # Retry immediately
 
-    print(f'Writing {stringName} domains took {time() - savedTime} seconds.')
+    print(f'Finished writing {stringName} domains.')
     threadStatus.append(stringName)
+
 
 def processHit(hit, version):
     # Make an autofocus request
-    print(f'Calling getDomainDoc with {hit.domain}')
-    try:
-        document = getDomainDoc(hit.domain)
-    except Exception as e:
-        print('Issue with getting the domain document:')
-        print(e)
+    print(f'Looking up tags for {hit.domain} . . .')
+    retry = True
+    while(retry):
+        try:
+            document = getDomainDoc(hit.domain)
+            retry = False
+        except Exception as e:
+            print(f'Issue with getting the domain document: {e}')
+            retry = True
 
-    print(f'Done with AF for {hit.domain}')
+    print(f'Got tags for {hit.domain}.')
 
     try:
         tag = document.tags[0][2][0]
@@ -231,6 +236,10 @@ def processIndex(version):
     '''
     Use AF to process parsed domains
     '''
+    if(version == None):
+        print('{} is not a valid version number. Stopping.')
+        return
+
     # Search for non-processed and non-generic
     newNonGenericSearch = Search(index=f'content_{version}').exclude('term', header='generic').query('match', processed=False)
     newNonGenericSearch.execute()
@@ -241,23 +250,21 @@ def processIndex(version):
     afStatsSearch.execute()
     for hit in afStatsSearch:
         dayAfReqsLeft = int(hit.daily_points_remaining / 12)
-        dayAfReqsLeft = min(20, dayAfReqsLeft) # TODO limit things down so you don't nuke your points when it starts working
 
     with Pool() as pool:
         it = pool.imap(partial(processHit, version=version), newNonGenericSearch.scan())
         # Write IPs of all matching documents back to test index
         while True:
-            print(f'{dayAfReqsLeft} AutoFocus requests left today')
+            print(f'{dayAfReqsLeft} AutoFocus requests left today.')
             if(dayAfReqsLeft < 1):
                 return # Nothing more to do today. 
             try:
                 next(it)
             except StopIteration as si:
-                print('No more to process')
+                print('No more domains to process.')
                 return
             except Exception as e:
-                print('Problem happened.')
-                print(e)
+                print(f'Issue getting next domain: {e}')
             # Decrement AF stats
             dayAfReqsLeft -= 1
 
@@ -267,8 +274,7 @@ def runParser():
     '''
     Download file from support portal, parse, and write to database. 
     '''
-    # Time full program runtime
-    initialTime = time()
+    global version
 
     # Compile regexes for section headers
     addedPattern = re.compile(app.config['ADD_REGEX'])
@@ -324,11 +330,13 @@ def runParser():
     try:
         if index.exists():
             # Search for metadoc complete
-            metaSearch = Search().query('match', metadoc=True)
-            completed = metaSearch.execute()
-            if completed:
+            metaSearch = Search(index=f'content_{version}').query('match', metadoc=True)
+            response = metaSearch.execute()
+            for hit in metaSearch:
+                complete = hit.complete
+            if complete:
                 print('This version has already been written to the database. Stopping.')
-                sys.exit(0) # Everything's fine, no need to retry # TODO maybe not sys here
+                return # Everything's fine, no need to retry
             else:
                 # Last write was incomplete; delete the index and start over
                 print('Clearing index.')
@@ -382,9 +390,7 @@ def runParser():
             print(e)
             raise RetryException # Retry immediately
 
-        print(f'Finished running in {time() - initialTime} seconds.')
-
-    processIndex(version)
+        print(f'Finished writing to database.')
 
 
 def tryParse():
@@ -398,15 +404,16 @@ def tryParse():
             print('Script failed, retrying.')
             retry = True
         except MaintenanceException:
-            print('Script may need maintenance. Find the programmer. Stopping.')
-            # TODO panic
+            print('Script may need maintenance. Find the programmer. Stopping without asking AutoFocus.')
+            return
         except Exception as e:
-            print('Uncaught exception from runParser. Stopping.')
+            print('Uncaught exception from runParser. Stopping without asking AutoFocus.')
             print(e)
+            return
         triesLeft -= 1
+    
+    # Process the index before you stop
+    processIndex(version)
 
 if __name__ == '__main__':
-    # print('ERROR LOG STATEMENTS WORKING NOW?') # TODO they aren't
     tryParse()
-    # connections.create_connection(host='localhost')
-    # processIndex('3006-3516')
