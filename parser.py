@@ -171,7 +171,7 @@ def parseAndWrite(stringName, pattern, array, version, threadStatus):
         splitHeader = splitRaw[0].split('.')
         # Create new DomainDocument in db
         myDoc = DomainDocument(meta={'id':domain})
-        myDoc.meta.index = version
+        myDoc.meta.index = f'content_{version}'
         myDoc.raw = raw
         myDoc.header = splitRaw[0]
         myDoc.threatType = splitHeader[0]
@@ -245,7 +245,7 @@ def runParser():
     app.logger.info(f'Writing updates for latest version: {version} (released {date}).')
 
     # Establish index to write to
-    index = Index(version)
+    index = Index(f'content_{version}')
 
     # Stop if we've written this fully before; delete if it was a partial write
     try:
@@ -255,7 +255,7 @@ def runParser():
             completed = metaSearch.execute()
             if completed:
                 app.logger.info('This version has already been written to the database. Stopping.')
-                sys.exit(0) # Everything's fine, no need to retry
+                sys.exit(0) # Everything's fine, no need to retry # TODO maybe not sys here
             else:
                 # Last write was incomplete; delete the index and start over
                 app.logger.info('Clearing index.')
