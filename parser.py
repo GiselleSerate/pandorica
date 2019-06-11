@@ -1,9 +1,11 @@
 from datetime import datetime
+from functools import partial
 from logging.config import dictConfig
+from multiprocessing import Pool
 import re
 import sys
 from threading import Thread
-import time # for timing database writes
+from time import time, sleep
 
 from bs4 import BeautifulSoup
 from elasticsearch_dsl import DocType, Boolean, Date, Keyword, Text, connections, Index, Search, UpdateByQuery
@@ -11,9 +13,13 @@ from flask import Flask
 from flask.logging import default_handler
 import urllib.request
 
-import sys # TODO: only for the next line
+import sys # TODO: only for local imports
 sys.path.append('../content_downloader') # TODO: this is Bad and I'm Sorry.
 from content_downloader import ContentDownloader
+
+sys.path.append('../safe-networking') # TODO: this is Bad and I'm Sorry.
+from project.dns.dnsutils import updateAfStats, getDomainDoc
+from project.dns.dns import DomainDetailsDoc, TagDetailsDoc
 
 dictConfig({
     'version': 1,
@@ -33,8 +39,8 @@ dictConfig({
 
 # Configuration
 app = Flask(__name__)
-app.config.from_object('config.DebugConfig')
-app.logger.removeHandler(default_handler)
+app.config.from_object('config.DebugConfig') # TODO I don't even know
+# app.logger.removeHandler(default_handler)
 
 class RetryException(Exception):
     '''
@@ -91,6 +97,7 @@ class DomainDocument(DocType):
     threatClass = Keyword()
     action = Text()
     tags = Text(multi=True)
+    processed = Boolean()
 
     class Index:
         name = 'placeholder'
@@ -104,8 +111,13 @@ class DomainDocument(DocType):
         return cls(
             id=obj.id,
             domain=obj.domain,
-            added=obj.added,
-            removed=obj.removed,
+            raw=obj.raw,
+            header=obj.header,
+            threatType=obj.threatType,
+            threatClass=obj.threatClass,
+            action=obj.action,
+            tags=obj.tags,
+            processed=obj.processed,
             )
 
     def save(self, **kwargs):
@@ -162,10 +174,9 @@ def parseAndWrite(soup, stringName, pattern, array, version, threadStatus):
         raise MaintenanceException
 
     # Write domains of all relevant documents back to index
-    numDomains = "all" if app.config["NUM_DOMAINS"] == None else app.config["NUM_DOMAINS"]
-    app.logger.info(f'Writing {numDomains} {stringName} domains to database . . .')
-    savedTime = time.time()
-    for raw in array[:app.config['NUM_DOMAINS']]:
+    app.logger.info(f'Writing {stringName} domains to database . . .')
+    savedTime = time()
+    for raw in array:
         splitRaw = raw.split(':')
         domain = splitRaw[1]
         splitHeader = splitRaw[0].split('.')
@@ -178,6 +189,7 @@ def parseAndWrite(soup, stringName, pattern, array, version, threadStatus):
         myDoc.threatClass = splitHeader[1] if len(splitHeader) > 1 else None
         myDoc.domain = splitRaw[1]
         myDoc.action = stringName
+        myDoc.processed = 0
 
         try:
             myDoc.save()
@@ -186,8 +198,69 @@ def parseAndWrite(soup, stringName, pattern, array, version, threadStatus):
             app.logger.error(e)
             raise RetryException # Retry immediately
 
-    app.logger.info(f'Writing {stringName} domains took {time.time() - savedTime} seconds.')
+    app.logger.info(f'Writing {stringName} domains took {time() - savedTime} seconds.')
     threadStatus.append(stringName)
+
+def processHit(hit, version):
+    # Make an autofocus request
+    print(f'Calling getDomainDoc with {hit.domain}')
+    try:
+        document = getDomainDoc(hit.domain)
+    except Exception as e:
+        print('Issue with getting the domain document:')
+        print(e)
+
+    print(f'Done with AF for {hit.domain}')
+
+    try:
+        tag = document.tags[0][2][0]
+        # Write first tag to db
+        ubq = UpdateByQuery(index=f'content_{version}')     \
+              .query("match", domain=hit.domain)            \
+              .script(source="ctx._source.tag=params.tag; ctx._source.processed=true", lang="painless", params={'tag': tag})
+    except AttributeError: 
+        # No tag available. Regardless, note that we have processed this entry
+        ubq = UpdateByQuery(index=f'content_{version}')     \
+              .query("match", domain=hit.domain)            \
+              .script(source="ctx._source.processed=true", lang="painless")
+
+    response = ubq.execute()
+
+
+def processIndex(version):
+    '''
+    Use AF to process parsed domains
+    '''
+    # Search for non-processed and non-generic
+    newNonGenericSearch = Search(index=f'content_{version}').exclude('term', header='generic').query('match', processed=False)
+    newNonGenericSearch.execute()
+
+    # Determine how many AutoFocus points we have
+    updateAfStats()
+    afStatsSearch = Search(index='af-details')
+    afStatsSearch.execute()
+    for hit in afStatsSearch:
+        dayAfReqsLeft = int(hit.daily_points_remaining / 12)
+        dayAfReqsLeft = min(20, dayAfReqsLeft) # TODO limit things down so you don't nuke your points when it starts working
+
+    with Pool() as pool:
+        it = pool.imap(partial(processHit, version=version), newNonGenericSearch.scan())
+        # Write IPs of all matching documents back to test index
+        while True:
+            print(f'{dayAfReqsLeft} AutoFocus requests left today')
+            if(dayAfReqsLeft < 1):
+                return # Nothing more to do today. 
+            try:
+                next(it)
+            except StopIteration as si:
+                print('No more to process')
+                return
+            except Exception as e:
+                print('Problem happened.')
+                print(e)
+            # Decrement AF stats
+            dayAfReqsLeft -= 1
+
 
 
 def runParser():
@@ -195,7 +268,7 @@ def runParser():
     Download file from support portal, parse, and write to database. 
     '''
     # Time full program runtime
-    initialTime = time.time()
+    initialTime = time()
 
     # Compile regexes for section headers
     addedPattern = re.compile(app.config['ADD_REGEX'])
@@ -270,7 +343,7 @@ def runParser():
 
     # Create new MetaDocument in db
     myDoc = MetaDocument()
-    myDoc.meta.index = version
+    myDoc.meta.index = f'content_{version}'
     myDoc.metadoc = True
     myDoc.complete = False
     myDoc.version = version
@@ -300,8 +373,8 @@ def runParser():
     else:
         try:
             # Finish by committing
-            ubq = UpdateByQuery(index=version)      \
-                  .query("match", metadoc=True)     \
+            ubq = UpdateByQuery(index=f'content_{version}')     \
+                  .query("match", metadoc=True)                 \
                   .script(source="ctx._source.complete=true", lang="painless")
             response = ubq.execute()
         except Exception as e:
@@ -309,19 +382,20 @@ def runParser():
             app.logger.error(e)
             raise RetryException # Retry immediately
 
-        app.logger.info(f'Finished running in {time.time() - initialTime} seconds.')
+        app.logger.info(f'Finished running in {time() - initialTime} seconds.')
+
+    processIndex(version)
 
 
 def tryParse():
-    retriesLeft = 10
+    triesLeft = app.config['NUM_TRIES']
     retry = True
-    while retry and retriesLeft > 0:
+    while retry and triesLeft > 0:
         retry = False
-        retriesLeft -= 1
         try:
             runParser()
         except RetryException:
-            app.logger.error('Script failed, retrying.') # TODO limit retries. maybe refactor this bit. 
+            app.logger.error('Script failed, retrying.')
             retry = True
         except MaintenanceException:
             app.logger.error('Script may need maintenance. Find the programmer. Stopping.')
@@ -329,6 +403,10 @@ def tryParse():
         except Exception as e:
             app.logger.error('Uncaught exception from runParser. Stopping.')
             app.logger.error(e)
+        triesLeft -= 1
 
 if __name__ == '__main__':
+    # app.logger.error('ERROR LOG STATEMENTS WORKING NOW?') # TODO they aren't
     tryParse()
+    # connections.create_connection(host='localhost')
+    # processIndex('3006-3516')
