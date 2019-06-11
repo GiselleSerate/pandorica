@@ -165,16 +165,16 @@ def parseAndWrite(soup, stringName, pattern, array, version, threadStatus):
             else:
                 array.append(result.group(1))
 
-        app.logger.info(f'{len(array)} domains {stringName}, like {array[:3]}')
+        print(f'{len(array)} domains {stringName}, like {array[:3]}')
     except Exception as e:
-        app.logger.error(f'Parse of {stringName} failed. Are you sure this HTML file is the right format?')
-        app.logger.error(e)
+        print(f'Parse of {stringName} failed. Are you sure this HTML file is the right format?')
+        print(e)
         # If we can't parse out domains, don't write to the db; suggests a fundamental document 
         # format change requiring more maintenance than a simple retry. Get a human to look at this. 
         raise MaintenanceException
 
     # Write domains of all relevant documents back to index
-    app.logger.info(f'Writing {stringName} domains to database . . .')
+    print(f'Writing {stringName} domains to database . . .')
     savedTime = time()
     for raw in array:
         splitRaw = raw.split(':')
@@ -194,11 +194,11 @@ def parseAndWrite(soup, stringName, pattern, array, version, threadStatus):
         try:
             myDoc.save()
         except Exception as e:
-            app.logger.error('Saving domain failed; check connection to database and retry.')
-            app.logger.error(e)
+            print('Saving domain failed; check connection to database and retry.')
+            print(e)
             raise RetryException # Retry immediately
 
-    app.logger.info(f'Writing {stringName} domains took {time() - savedTime} seconds.')
+    print(f'Writing {stringName} domains took {time() - savedTime} seconds.')
     threadStatus.append(stringName)
 
 def processHit(hit, version):
@@ -279,7 +279,7 @@ def runParser():
     removed = []
 
 
-    app.logger.info(f'Retrieving latest release notes from support portal . . .')
+    print(f'Retrieving latest release notes from support portal . . .')
 
     username = app.config['USERNAME']
     password = app.config['PASSWORD']
@@ -304,7 +304,7 @@ def runParser():
     try:
         data = urllib.request.urlopen(fileurl)
     except urllib.error.URLError:
-        app.logger.error(f'Updates failed to download from {fileurl}')
+        print(f'Updates failed to download from {fileurl}')
         raise RetryException # Retry immediately
 
 
@@ -315,7 +315,7 @@ def runParser():
     # Establish database connection (port 9200 by default)
     connections.create_connection(host=app.config['HOST_IP'])
 
-    app.logger.info(f'Writing updates for latest version: {version} (released {date}).')
+    print(f'Writing updates for latest version: {version} (released {date}).')
 
     # Establish index to write to
     index = Index(f'content_{version}')
@@ -327,15 +327,15 @@ def runParser():
             metaSearch = Search().query('match', metadoc=True)
             completed = metaSearch.execute()
             if completed:
-                app.logger.info('This version has already been written to the database. Stopping.')
+                print('This version has already been written to the database. Stopping.')
                 sys.exit(0) # Everything's fine, no need to retry # TODO maybe not sys here
             else:
                 # Last write was incomplete; delete the index and start over
-                app.logger.info('Clearing index.')
+                print('Clearing index.')
                 index.delete()
     except Exception as e:
-        app.logger.error('Issue with the existing index. Try checking your connection or manually deleting the index and retry.')
-        app.logger.error(e)
+        print('Issue with the existing index. Try checking your connection or manually deleting the index and retry.')
+        print(e)
         raise RetryException # Retry immediately
 
     # Create new index
@@ -351,8 +351,8 @@ def runParser():
     try:
         myDoc.save()
     except Exception as e:
-        app.logger.error('Saving metadocument failed; check connection to database and retry.')
-        app.logger.error(e)
+        print('Saving metadocument failed; check connection to database and retry.')
+        print(e)
         raise RetryException # Retry immediately
 
 
@@ -369,7 +369,7 @@ def runParser():
 
     # Make sure both threads are okay before committing
     if(len(threadStatus) < 2):
-        app.logger.error(f'Incomplete run. Please retry. Only wrote {threadStatus} to the database.')
+        print(f'Incomplete run. Please retry. Only wrote {threadStatus} to the database.')
     else:
         try:
             # Finish by committing
@@ -378,11 +378,11 @@ def runParser():
                   .script(source="ctx._source.complete=true", lang="painless")
             response = ubq.execute()
         except Exception as e:
-            app.logger.error('Failed to tell database that index was complete. Retry.')
-            app.logger.error(e)
+            print('Failed to tell database that index was complete. Retry.')
+            print(e)
             raise RetryException # Retry immediately
 
-        app.logger.info(f'Finished running in {time() - initialTime} seconds.')
+        print(f'Finished running in {time() - initialTime} seconds.')
 
     processIndex(version)
 
@@ -395,18 +395,18 @@ def tryParse():
         try:
             runParser()
         except RetryException:
-            app.logger.error('Script failed, retrying.')
+            print('Script failed, retrying.')
             retry = True
         except MaintenanceException:
-            app.logger.error('Script may need maintenance. Find the programmer. Stopping.')
+            print('Script may need maintenance. Find the programmer. Stopping.')
             # TODO panic
         except Exception as e:
-            app.logger.error('Uncaught exception from runParser. Stopping.')
-            app.logger.error(e)
+            print('Uncaught exception from runParser. Stopping.')
+            print(e)
         triesLeft -= 1
 
 if __name__ == '__main__':
-    # app.logger.error('ERROR LOG STATEMENTS WORKING NOW?') # TODO they aren't
+    # print('ERROR LOG STATEMENTS WORKING NOW?') # TODO they aren't
     tryParse()
     # connections.create_connection(host='localhost')
     # processIndex('3006-3516')
