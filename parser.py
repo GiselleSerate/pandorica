@@ -1,27 +1,22 @@
 from datetime import datetime
-from functools import partial
 from logging.config import dictConfig
-from multiprocessing import Pool
 import re
 import sys
 from threading import Thread
-from time import sleep
 
 from bs4 import BeautifulSoup
-from elasticsearch_dsl import DocType, Boolean, Date, Keyword, Text, connections, Index, Search, UpdateByQuery
+from elasticsearch_dsl import connections, Index, Search, UpdateByQuery
 from flask import Flask
 from flask.logging import default_handler
 import urllib.request
 
-import sys # TODO: only for local imports
-sys.path.append('../content_downloader') # TODO: this is Bad and I'm Sorry.
-from content_downloader import ContentDownloader
+from domain_processor import processIndex
+from domain_docs import RetryException, MaintenanceException, MetaDocument, DomainDocument
 
-sys.path.append('../safe-networking') # TODO: this is Bad and I'm Sorry.
-from project.dns.dnsutils import updateAfStats, getDomainDoc
-from project.dns.dns import DomainDetailsDoc, TagDetailsDoc
+# import sys # TODO: only for local imports
+# sys.path.append('../content_downloader') # TODO: this is Bad and I'm Sorry.
+# from content_downloader import ContentDownloader
 
-version = None
 
 dictConfig({
     'version': 1,
@@ -41,104 +36,47 @@ dictConfig({
 
 # Configuration
 app = Flask(__name__)
-app.config.from_object('config.DebugConfig') # TODO I don't even know
+app.config.from_object('config.DebugConfig')
 # app.logger.removeHandler(default_handler)
 
-class RetryException(Exception):
-    '''
-    Raised when the action should be retried
-    '''
-    pass
+# NOTE: the following is how we call the content downloader, but it's currently broken. 
+# # Create contentdownloader object to get AV release notes
+# downloader = ContentDownloaderWithDate(username=username, password=password, package='antivirus',
+#                                        debug=False, isReleaseNotes=True)
 
-class MaintenanceException(Exception):
-    '''
-    Raised when the script may be now obsolete due to format changes, etc
-    '''
-    pass
+# # Check latest version. Login if necessary.
+# token, updates = downloader.check()
 
-class MetaDocument(DocType):
-    '''
-    Unique class for writing metadata to an index
-    '''
-    id = Text(analyzer='snowball', fields={'raw': Keyword()})
-    metadoc = Text()
-    complete = Boolean()
-    version = Text()
-    date = Date()
+# # Determine latest update
+# filename, foldername, latestversion, date = downloader.find_latest_update(updates)
 
-    class Index:
-        name = 'placeholder'
+# # version = 'foobar'
+# version = latestversion
 
-    @classmethod
-    def get_indexable(cls):
-        return cls.get_model().get_objects()
+# # Get download URL
+# fileurl = downloader.get_download_link(token, filename, foldername)
 
-    @classmethod
-    def from_obj(cls, obj):
-        return cls(
-            id=obj.id,
-            metadoc=obj.metadoc,
-            complete=obj.complete,
-            version=obj.version,
-            date=obj.date,
-            )
-
-    def save(self, **kwargs):
-        return super(MetaDocument, self).save(**kwargs)
-
-class DomainDocument(DocType):
-    '''
-    Class for writing domains back to the database
-    '''
-    # Use domain as id
-    id = Text(analyzer='snowball', fields={'raw': Keyword()})
-    domain = Keyword()
-    raw = Keyword()
-    header = Keyword()
-    threatType = Keyword()
-    threatClass = Keyword()
-    action = Text()
-    tags = Text(multi=True)
-    processed = Boolean()
-
-    class Index:
-        name = 'placeholder'
-
-    @classmethod
-    def get_indexable(cls):
-        return cls.get_model().get_objects()
-
-    @classmethod
-    def from_obj(cls, obj):
-        return cls(
-            id=obj.id,
-            domain=obj.domain,
-            raw=obj.raw,
-            header=obj.header,
-            threatType=obj.threatType,
-            threatClass=obj.threatClass,
-            action=obj.action,
-            tags=obj.tags,
-            processed=obj.processed,
-            )
-
-    def save(self, **kwargs):
-        return super(DomainDocument, self).save(**kwargs)
+# # Get HTML file to parse
+# try:
+#     data = urllib.request.urlopen(fileurl)
+# except urllib.error.URLError:
+#     print(f'Updates failed to download from {fileurl}')
+#     raise RetryException # Retry immediately
 
 
-class ContentDownloaderWithDate(ContentDownloader):
-    '''
-    Extend ContentDownloader to provide the update date
-    '''
-    def find_latest_update(self, updates):
-        '''
-        Extend function to additionally return update date
-        as its last argument
-        '''
-        updates_of_type = [u for u in updates if u['Key'] == self.key]
-        updates_sorted = sorted(updates_of_type, key=lambda x: datetime.strptime(x['ReleaseDate'], '%Y-%m-%dT%H:%M:%S'))
-        latest = updates_sorted[-1]
-        return latest[self.filename_string], latest['FolderName'], latest['VersionNumber'], latest['ReleaseDate']
+# class ContentDownloaderWithDate(ContentDownloader):
+#     '''
+#     Extend ContentDownloader to provide the update date
+#     '''
+#     def find_latest_update(self, updates):
+#         '''
+#         Extend function to additionally return update date
+#         as its last argument
+#         '''
+#         updates_of_type = [u for u in updates if u['Key'] == self.key]
+#         updates_sorted = sorted(updates_of_type, key=lambda x: datetime.strptime(x['ReleaseDate'], '%Y-%m-%dT%H:%M:%S'))
+#         latest = updates_sorted[-1]
+#         return latest[self.filename_string], latest['FolderName'], latest['VersionNumber'], latest['ReleaseDate']
 
 
 def parseAndWrite(soup, stringName, pattern, array, version, threadStatus):
@@ -203,79 +141,13 @@ def parseAndWrite(soup, stringName, pattern, array, version, threadStatus):
     threadStatus.append(stringName)
 
 
-def processHit(hit, version):
-    # Make an autofocus request
-    print(f'Looking up tags for {hit.domain} . . .')
-    retry = True
-    while(retry):
-        try:
-            document = getDomainDoc(hit.domain)
-            retry = False
-        except Exception as e:
-            print(f'Issue with getting the domain document: {e}')
-            retry = True
-
-    print(f'Got tags for {hit.domain}.')
-
-    try:
-        tag = document.tags[0][2][0]
-        # Write first tag to db
-        ubq = UpdateByQuery(index=f'content_{version}')     \
-              .query("match", domain=hit.domain)            \
-              .script(source="ctx._source.tag=params.tag; ctx._source.processed=true", lang="painless", params={'tag': tag})
-    except AttributeError: 
-        # No tag available. Regardless, note that we have processed this entry
-        ubq = UpdateByQuery(index=f'content_{version}')     \
-              .query("match", domain=hit.domain)            \
-              .script(source="ctx._source.processed=true", lang="painless")
-
-    response = ubq.execute()
-
-
-def processIndex(version):
+def runParser(path, version, date):
     '''
-    Use AF to process parsed domains
+    Get file with the path passed, parse, and write to database. 
     '''
-    if(version == None):
-        print(f'{version} is not a valid version number. Stopping.')
-        return
 
-    # Search for non-processed and non-generic
-    newNonGenericSearch = Search(index=f'content_{version}').exclude('term', header='generic').query('match', processed=False)
-    newNonGenericSearch.execute()
-
-    # Determine how many AutoFocus points we have
-    updateAfStats()
-    afStatsSearch = Search(index='af-details')
-    afStatsSearch.execute()
-    for hit in afStatsSearch:
-        dayAfReqsLeft = int(hit.daily_points_remaining / 12)
-
-    with Pool() as pool:
-        it = pool.imap(partial(processHit, version=version), newNonGenericSearch.scan())
-        # Write IPs of all matching documents back to test index
-        while True:
-            print(f'~{dayAfReqsLeft} AutoFocus requests left today.')
-            if(dayAfReqsLeft < 1):
-                return # Nothing more to do today. 
-            try:
-                next(it)
-            except StopIteration as si:
-                print('No more domains to process.')
-                return
-            except Exception as e:
-                print(f'Issue getting next domain: {e}')
-            # Decrement AF stats
-            dayAfReqsLeft -= 1
-
-
-
-def runParser():
-    '''
-    Download file from support portal, parse, and write to database. 
-    '''
-    global version
-
+    print(f'Running the parser.')
+    
     # Compile regexes for section headers
     addedPattern = re.compile(app.config['ADD_REGEX'])
     removedPattern = re.compile(app.config['REM_REGEX'])
@@ -285,34 +157,14 @@ def runParser():
     removed = []
 
 
-    print(f'Retrieving latest release notes from support portal . . .')
-
     username = app.config['USERNAME']
     password = app.config['PASSWORD']
 
-    # Create contentdownloader object to get AV release notes
-    downloader = ContentDownloaderWithDate(username=username, password=password, package='antivirus',
-                                           debug=False, isReleaseNotes=True)
-
-    # Check latest version. Login if necessary.
-    token, updates = downloader.check()
-
-    # Determine latest update
-    filename, foldername, latestversion, date = downloader.find_latest_update(updates)
-
-    # version = 'foobar'
-    version = latestversion
-
-    # Get download URL
-    fileurl = downloader.get_download_link(token, filename, foldername)
-
-    # Get HTML file to parse
     try:
-        data = urllib.request.urlopen(fileurl)
-    except urllib.error.URLError:
-        print(f'Updates failed to download from {fileurl}')
-        raise RetryException # Retry immediately
-
+        data = open(path)
+    except Exception as e:
+        print(f'Issue opening provided file at {path}.')
+        raise e # Reraise so the script stops
 
     # Parse file
     soup = BeautifulSoup(data, 'html5lib')
@@ -321,7 +173,7 @@ def runParser():
     # Establish database connection (port 9200 by default)
     connections.create_connection(host=app.config['HOST_IP'])
 
-    print(f'Writing updates for latest version: {version} (released {date}).')
+    print(f'Writing updates for version {version} (released {date}).')
 
     # Establish index to write to
     index = Index(f'content_{version}')
@@ -332,10 +184,11 @@ def runParser():
             # Search for metadoc complete
             metaSearch = Search(index=f'content_{version}').query('match', metadoc=True)
             response = metaSearch.execute()
+            complete = False # By default, assume incomplete
             for hit in metaSearch:
                 complete = hit.complete
             if complete:
-                print('This version has already been written to the database. Stopping.')
+                print('This version has already been written to the database. Not rewriting the base index.')
                 return # Everything's fine, no need to retry
             else:
                 # Last write was incomplete; delete the index and start over
@@ -393,13 +246,19 @@ def runParser():
         print(f'Finished writing to database.')
 
 
-def tryParse():
+def tryParse(path, version, date):
+    '''
+    Retry parse repeatedly
+    '''
     triesLeft = app.config['NUM_TRIES']
     retry = True
-    while retry and triesLeft > 0:
+    while retry:
         retry = False
+        if triesLeft < 1:
+            print('Ran out of retries. Stopping without asking AutoFocus.')
+            return
         try:
-            runParser()
+            runParser(path=path, version=version, date=date)
         except RetryException:
             print('Script failed, retrying.')
             retry = True
@@ -412,8 +271,8 @@ def tryParse():
             return
         triesLeft -= 1
     
-    # Process the index before you stop
+    # Process the index before stopping
     processIndex(version)
 
 if __name__ == '__main__':
-    tryParse()
+    tryParse(path=app.config['PATH'], version=app.config['VERSION'], date=app.config['DATE'])
