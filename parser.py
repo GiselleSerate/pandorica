@@ -146,8 +146,6 @@ def runParser(path, version, date):
     Get file with the path passed, parse, and write to database. 
     '''
 
-    print(f'Running the parser.')
-    
     # Compile regexes for section headers
     addedPattern = re.compile(app.config['ADD_REGEX'])
     removedPattern = re.compile(app.config['REM_REGEX'])
@@ -157,9 +155,8 @@ def runParser(path, version, date):
     removed = []
 
 
-    username = app.config['USERNAME']
-    password = app.config['PASSWORD']
-
+    print('Opening release notes.')
+    
     try:
         data = open(path)
     except Exception as e:
@@ -250,7 +247,12 @@ def tryParse(path, version, date):
     '''
     Retry parse repeatedly
     '''
-    triesLeft = app.config['NUM_TRIES']
+    try:
+        triesLeft = int(app.config['NUM_TRIES'])
+    except ValueError:
+        # Can't convert to an int; use a default.
+        triesLeft = 5
+        
     retry = True
     while retry:
         retry = False
@@ -260,7 +262,7 @@ def tryParse(path, version, date):
         try:
             runParser(path=path, version=version, date=date)
         except RetryException:
-            print('Script failed, retrying.')
+            print(f'Script failed, retrying. (Will try again {triesLeft} times before giving up.)')
             retry = True
         except MaintenanceException:
             print('Script may need maintenance. Find the programmer. Stopping without asking AutoFocus.')
