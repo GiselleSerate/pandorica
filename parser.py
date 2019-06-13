@@ -252,7 +252,7 @@ def tryParse(path, version, date):
     except ValueError:
         # Can't convert to an int; use a default.
         triesLeft = 5
-        
+
     retry = True
     while retry:
         retry = False
@@ -274,7 +274,9 @@ def tryParse(path, version, date):
         triesLeft -= 1
     
     # Process the index before stopping
-    processIndex(version)
+    # Try twice in case some domains would work on a retry or we use less AF points than anticipated
+    for i in range(2):
+        processIndex(version)
 
 if __name__ == '__main__':
     tryParse(path=app.config['PATH'], version=app.config['VERSION'], date=app.config['DATE'])
