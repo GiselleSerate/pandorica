@@ -13,9 +13,9 @@ import urllib.request
 from domain_processor import processIndex
 from domain_docs import RetryException, MaintenanceException, MetaDocument, DomainDocument
 
-# import sys # TODO: only for local imports
-# sys.path.append('../content_downloader') # TODO: this is Bad and I'm Sorry.
-# from content_downloader import ContentDownloader
+import sys # TODO: only for local imports
+sys.path.append('../release_scraper') # TODO: this is Bad and I'm Sorry.
+from scraper import Scraper
 
 
 dictConfig({
@@ -38,45 +38,6 @@ dictConfig({
 app = Flask(__name__)
 app.config.from_object('config.DebugConfig')
 # app.logger.removeHandler(default_handler)
-
-# NOTE: the following is how we call the content downloader, but it's currently broken. 
-# # Create contentdownloader object to get AV release notes
-# downloader = ContentDownloaderWithDate(username=username, password=password, package='antivirus',
-#                                        debug=False, isReleaseNotes=True)
-
-# # Check latest version. Login if necessary.
-# token, updates = downloader.check()
-
-# # Determine latest update
-# filename, foldername, latestversion, date = downloader.find_latest_update(updates)
-
-# # version = 'foobar'
-# version = latestversion
-
-# # Get download URL
-# fileurl = downloader.get_download_link(token, filename, foldername)
-
-# # Get HTML file to parse
-# try:
-#     data = urllib.request.urlopen(fileurl)
-# except urllib.error.URLError:
-#     print(f'Updates failed to download from {fileurl}')
-#     raise RetryException # Retry immediately
-
-
-# class ContentDownloaderWithDate(ContentDownloader):
-#     '''
-#     Extend ContentDownloader to provide the update date
-#     '''
-#     def find_latest_update(self, updates):
-#         '''
-#         Extend function to additionally return update date
-#         as its last argument
-#         '''
-#         updates_of_type = [u for u in updates if u['Key'] == self.key]
-#         updates_sorted = sorted(updates_of_type, key=lambda x: datetime.strptime(x['ReleaseDate'], '%Y-%m-%dT%H:%M:%S'))
-#         latest = updates_sorted[-1]
-#         return latest[self.filename_string], latest['FolderName'], latest['VersionNumber'], latest['ReleaseDate']
 
 
 def parseAndWrite(soup, stringName, pattern, array, version, threadStatus):
@@ -168,7 +129,7 @@ def runParser(path, version, date):
 
 
     # Establish database connection (port 9200 by default)
-    connections.create_connection(host=app.config['HOST_IP'])
+    connections.create_connection(host=app.config['ELASTIC_IP'])
 
     print(f'Writing updates for version {version} (released {date}).')
 
@@ -273,10 +234,40 @@ def tryParse(path, version, date):
             return
         triesLeft -= 1
     
+    # Tell update details that downloaded version has been consumed
+    ubq = UpdateByQuery(index='update-details') \
+            .query('match', version=version)    \
+            .script(source='ctx._source.analyzed=true', lang='painless')
+    response = ubq.execute()
+
     # Process the index before stopping
     # Try twice in case some domains would work on a retry or we use less AF points than anticipated
     for i in range(2):
         processIndex(version)
 
+
+def getUnanalyzedVersionDetails():
+    '''
+    Get all versions which have been downloaded but not analyzed
+    '''
+    retList = []
+    unanalyzedSearch = Search(index=f'update-details').query('match', analyzed=False)
+    response = unanalyzedSearch.execute()
+    for hit in unanalyzedSearch:
+        obj = {}
+        obj['version'] = hit.version
+        obj['date'] = hit.date
+        retList.append(obj)
+    return retList
+
 if __name__ == '__main__':
-    tryParse(path=app.config['PATH'], version=app.config['VERSION'], date=app.config['DATE'])
+    # Download latest release notes
+    scraper = Scraper(ip=app.config['FW_IP'], username=app.config['FW_USERNAME'], password=app.config['FW_PASSWORD'], \
+        debug=app.config['DEBUG'], chrome_driver=app.config['DRIVER'], binary_location=app.config['BINARY_LOCATION'], \
+        download_dir=app.config['DOWNLOAD_DIR'], elastic_ip=app.config['ELASTIC_IP'])
+    scraper.full_download()
+
+    details = getUnanalyzedVersionDetails()
+    for version in details:
+        print(version)
+        tryParse(path=f'{app.config["DOWNLOAD_DIR"]}/Updates_{version["version"]}.html', version=version['version'], date=version['date'])
