@@ -11,11 +11,11 @@ from flask.logging import default_handler
 import urllib.request
 
 from domain_processor import processIndex
-from domain_docs import RetryException, MaintenanceException, MetaDocument, DomainDocument
+from domain_docs import RetryException, MaintenanceException, DomainDocument
 
 import sys # TODO: only for local imports
 sys.path.append('../release_scraper') # TODO: this is Bad and I'm Sorry.
-from scraper import Scraper
+from scraper import DocStatus, Scraper, VersionDocument
 
 
 dictConfig({
@@ -139,12 +139,13 @@ def runParser(path, version, date):
     # Stop if we've written this fully before; delete if it was a partial write
     try:
         if index.exists():
-            # Search for metadoc complete
-            metaSearch = Search(index=f'content_{version}').query('match', metadoc=True)
+            # Search for metadoc to see if it was fully written
+            metaSearch = Search(index='update-details') \
+                    .query('match', version=version)
             response = metaSearch.execute()
-            complete = False # By default, assume incomplete
+            complete = 0 # By default, assume incomplete
             for hit in metaSearch:
-                complete = hit.complete
+                complete = hit.status >= DocStatus.WRITTEN.value
             if complete:
                 print('This version has already been written to the database. Not rewriting the base index.')
                 return # Everything's fine, no need to retry
@@ -159,20 +160,6 @@ def runParser(path, version, date):
 
     # Create new index
     index.create()
-
-    # Create new MetaDocument in db
-    myDoc = MetaDocument()
-    myDoc.meta.index = f'content_{version}'
-    myDoc.metadoc = True
-    myDoc.complete = False
-    myDoc.version = version
-    myDoc.date = date
-    try:
-        myDoc.save()
-    except Exception as e:
-        print('Saving metadocument failed; check connection to database and retry.')
-        print(e)
-        raise RetryException # Retry immediately
 
 
     # Status gets stored here
@@ -190,17 +177,6 @@ def runParser(path, version, date):
     if(len(threadStatus) < 2):
         print(f'Incomplete run. Please retry. Only wrote {threadStatus} to the database.')
     else:
-        try:
-            # Finish by committing
-            ubq = UpdateByQuery(index=f'content_{version}')     \
-                  .query("match", metadoc=True)                 \
-                  .script(source="ctx._source.complete=true", lang="painless")
-            response = ubq.execute()
-        except Exception as e:
-            print('Failed to tell database that index was complete. Retry.')
-            print(e)
-            raise RetryException # Retry immediately
-
         print(f'Finished writing to database.')
 
 
@@ -237,21 +213,19 @@ def tryParse(path, version, date):
     # Tell update details that downloaded version has been consumed
     ubq = UpdateByQuery(index='update-details') \
             .query('match', version=version)    \
-            .script(source='ctx._source.analyzed=true', lang='painless')
+            .script(source='ctx._source.status=params.status', lang='painless', params={'status':DocStatus.WRITTEN.value})
     response = ubq.execute()
 
     # Process the index before stopping
-    # Try twice in case some domains would work on a retry or we use less AF points than anticipated
-    for i in range(2):
-        processIndex(version)
+    processIndex(version)
 
 
 def getUnanalyzedVersionDetails():
     '''
-    Get all versions which have been downloaded but not analyzed
+    Get all versions which have been downloaded only
     '''
     retList = []
-    unanalyzedSearch = Search(index=f'update-details').query('match', analyzed=False)
+    unanalyzedSearch = Search(index='update-details').query('match', status=1)
     response = unanalyzedSearch.execute()
     for hit in unanalyzedSearch:
         obj = {}
@@ -268,6 +242,8 @@ if __name__ == '__main__':
     scraper.full_download()
 
     details = getUnanalyzedVersionDetails()
+    print(f"Analyzing the following versions:")
+    print(details)
     for version in details:
-        print(version)
+        print(f"VERSION {version['version']} FROM {version['date']}")
         tryParse(path=f'{app.config["DOWNLOAD_DIR"]}/Updates_{version["version"]}.html', version=version['version'], date=version['date'])

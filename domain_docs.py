@@ -1,4 +1,4 @@
-from elasticsearch_dsl import DocType, Boolean, Date, Keyword, Text, Index
+from elasticsearch_dsl import Date, DocType, Index, Integer, Keyword, Text
 
 class RetryException(Exception):
     '''
@@ -11,36 +11,6 @@ class MaintenanceException(Exception):
     Raised when the script may be now obsolete due to format changes, etc
     '''
     pass
-
-class MetaDocument(DocType):
-    '''
-    Unique class for writing metadata to an index
-    '''
-    id = Text(analyzer='snowball', fields={'raw': Keyword()})
-    metadoc = Text()
-    complete = Boolean()
-    version = Text()
-    date = Date()
-
-    class Index:
-        name = 'placeholder'
-
-    @classmethod
-    def get_indexable(cls):
-        return cls.get_model().get_objects()
-
-    @classmethod
-    def from_obj(cls, obj):
-        return cls(
-            id=obj.id,
-            metadoc=obj.metadoc,
-            complete=obj.complete,
-            version=obj.version,
-            date=obj.date,
-            )
-
-    def save(self, **kwargs):
-        return super(MetaDocument, self).save(**kwargs)
 
 class DomainDocument(DocType):
     '''
@@ -55,7 +25,7 @@ class DomainDocument(DocType):
     threatClass = Keyword()
     action = Text()
     tags = Text(multi=True)
-    processed = Boolean()
+    processed = Integer()
 
     class Index:
         name = 'placeholder'
