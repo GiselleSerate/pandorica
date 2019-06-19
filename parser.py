@@ -12,9 +12,6 @@ import urllib.request
 
 from domain_processor import processIndex
 from domain_docs import RetryException, MaintenanceException, DomainDocument
-
-import sys # TODO: only for local imports
-sys.path.append('../release_scraper') # TODO: this is Bad and I'm Sorry.
 from scraper import DocStatus, Scraper, VersionDocument
 
 
