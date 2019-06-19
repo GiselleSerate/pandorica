@@ -1,3 +1,30 @@
+# Copyright (c) 2019, Palo Alto Networks
+#
+# Permission to use, copy, modify, and/or distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+# OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+# Author: Giselle Serate <gserate@paloaltonetworks.com>
+
+'''
+Palo Alto Networks domain_processor.py
+
+Provides methods to process domains by querying AutoFocus about them.
+
+Use this file as an include rather than running it on its own.
+
+This software is provided without support, warranty, or guarantee.
+Use at your own risk.
+'''
+
 from functools import partial
 from multiprocessing import Pool
 
@@ -14,14 +41,18 @@ from scraper import DocStatus
 
 
 
-def processHit(hit, version):
+def process_hit(hit, version):
     '''
-    Process single domain
+    Ask AutoFocus about a single domain.
+
+    Non-keyword arguments:
+    hit -- a domain to process
+    version -- the full version number
     '''
-    # Make an autofocus request
     print(f'Looking up tags for {hit.domain} . . .')
 
     try:
+        # Make an autofocus request.
         document = getDomainDoc(hit.domain)
     except Exception as e:
         print(f'Issue with getting the domain document: {e}')
@@ -31,63 +62,72 @@ def processHit(hit, version):
 
     try:
         tag = document.tags[0][2][0]
-        # Write first tag to db
-        ubq = UpdateByQuery(index=f'content_{version}')     \
-              .query("match", domain=hit.domain)            \
-              .script(source="ctx._source.tag=params.tag; ctx._source.processed=1", lang="painless", params={'tag': tag})
+        # Write first tag to db.
+        ubq = (UpdateByQuery(index=f'content_{version}')
+               .query("match", domain=hit.domain)
+               .script(source="ctx._source.tag=params.tag; ctx._source.processed=1",
+                       lang="painless", params={'tag': tag}))
         ubq.execute()
-    except (AttributeError, IndexError): 
-        # No tag available. Regardless, note that we have processed this entry
-        ubq = UpdateByQuery(index=f'content_{version}')     \
-              .query("match", domain=hit.domain)            \
-              .script(source="ctx._source.processed=1", lang="painless")
+    except (AttributeError, IndexError):
+        # No tag available. Regardless, note that we have processed this entry.
+        ubq = (UpdateByQuery(index=f'content_{version}')
+               .query("match", domain=hit.domain)
+               .script(source="ctx._source.processed=1", lang="painless"))
         ubq.execute()
 
 
-def processIndex(version):
+def process_index(version):
     '''
-    Use AutoFocus to process all parsed domains in an index
+    Use AutoFocus to process all parsed domains in an index.
+
+    Non-keyword arguments:
+    version -- the full version number
     '''
     print(f'Processing domains for version {version}.')
 
-    if(version == None):
+    if version is None:
         print(f'{version} is not a valid version number. Stopping.')
         return
 
-    # TODO: I stuck this in here but it's really only necessary if you run this interactively without running the parser first
-    # Establish database connection (port 9200 by default)
+    # TODO: I stuck this in here but it's really only necessary if
+    # you run this interactively without running the parser first.
+    # Establish database connection (port 9200 by default).
     connections.create_connection(host='localhost')
 
-    # Search for non-processed and non-generic
-    newNonGenericSearch = Search(index=f'content_{version}').exclude('term', header='generic').query('match', processed=0)
-    newNonGenericSearch.execute()
+    # Search for non-processed and non-generic.
+    new_nongeneric_search = (Search(index=f'content_{version}')
+                             .exclude('term', header='generic')
+                             .query('match', processed=0))
+    new_nongeneric_search.execute()
 
-    # Determine how many AutoFocus points we have
+    # Determine how many AutoFocus points we have.
     updateAfStats()
-    afStatsSearch = Search(index='af-details')
-    afStatsSearch.execute()
-    for hit in afStatsSearch:
-        dayAfReqsLeft = int(hit.daily_points_remaining / 12)
+    af_stats_search = Search(index='af-details')
+    af_stats_search.execute()
+    for hit in af_stats_search:
+        day_af_reqs_left = int(hit.daily_points_remaining / 12)
 
     with Pool() as pool:
-        it = pool.imap(partial(processHit, version=version), newNonGenericSearch.scan())
-        # Write IPs of all matching documents back to test index
+        iterator = pool.imap(partial(process_hit, version=version), new_nongeneric_search.scan())
+        # Write IPs of all matching documents back to test index.
         while True:
-            print(f'~{dayAfReqsLeft} AutoFocus requests left today.')
-            if(dayAfReqsLeft < 1):
-                return # Nothing more to do today. 
+            print(f'~{day_af_reqs_left} AutoFocus requests left today.')
+            if day_af_reqs_left < 1:
+                # Not enough points to do more today.
+                return
             try:
-                next(it)
-            except StopIteration as si:
+                next(iterator)
+            except StopIteration:
                 print('No more domains to process.')
                 return
             except Exception as e:
                 print(f'Issue getting next domain: {e}')
-            # Decrement AF stats
-            dayAfReqsLeft -= 1
+            # Decrement AF stats.
+            day_af_reqs_left -= 1
 
-    # Tell update details that version has been AutoFocused
-    ubq = UpdateByQuery(index='update-details') \
-            .query('match', version=version)    \
-            .script(source='ctx._source.status=params.status', lang='painless', params={'status':DocStatus.AUTOFOCUSED.value})
+    # Tell update details that version has been AutoFocused.
+    ubq = (UpdateByQuery(index='update-details')
+           .query('match', version=version)
+           .script(source='ctx._source.status=params.status', lang='painless',
+                   params={'status':DocStatus.AUTOFOCUSED.value}))
     ubq.execute()

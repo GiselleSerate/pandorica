@@ -1,5 +1,5 @@
 class Config(object):
-    DEBUG = False # Currently release_scraper doesn't do work on not-debug. 
+    DEBUG = False
     FW_IP = '10.48.60.12'
     FW_USERNAME = 'admin'
     FW_PASSWORD = 'admin'
