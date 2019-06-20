@@ -25,16 +25,16 @@ This software is provided without support, warranty, or guarantee.
 Use at your own risk.
 '''
 
-from logging.config import dictConfig
 import re
+from logging.config import dictConfig
 from threading import Thread
 
 from bs4 import BeautifulSoup
 from elasticsearch_dsl import connections, Index, Search, UpdateByQuery
 from flask import Flask
 
-from domain_processor import process_index
 from domain_docs import RetryException, MaintenanceException, DomainDocument
+from domain_processor import process_domains
 from scraper import DocStatus, FirewallScraper
 
 
@@ -60,7 +60,7 @@ app = Flask(__name__)
 app.config.from_object('config.DebugConfig')
 
 
-def parse_and_write(soup, string_name, pattern, array, version, thread_status): # TODO update docstrings lollll
+def parse_and_write(soup, string_name, pattern, array, version, thread_status):
     '''
     Pulls all domains of one type from the soup and then writes them to the database.
 
@@ -126,6 +126,12 @@ def parse_and_write(soup, string_name, pattern, array, version, thread_status): 
 def run_parser(path, version, date):
     '''
     Get file with the path passed, parse, and write to database.
+
+    Non-keyword arguments:
+    path -- the local path to the release notes (may be relative)
+    version -- the full version number
+    date -- the release date
+
     '''
 
     # Domains get stored here
@@ -204,7 +210,13 @@ def run_parser(path, version, date):
 
 def try_parse(path, version, date):
     '''
-    Retry parse repeatedly
+    Retry parse repeatedly.
+
+    Non-keyword arguments:
+    path -- the local path to the release notes (may be relative)
+    version -- the full version number
+    date -- the release date
+
     '''
     try:
         tries_left = int(app.config['NUM_TRIES'])
@@ -216,7 +228,7 @@ def try_parse(path, version, date):
     while retry:
         retry = False
         if tries_left < 1:
-            print("Ran out of retries. Stopping without asking AutoFocus.")
+            print("Ran out of retries. Stopping without marking as written.")
             return
         try:
             run_parser(path=path, version=version, date=date)
@@ -225,29 +237,24 @@ def try_parse(path, version, date):
             retry = True
         except MaintenanceException:
             print(f"Script may need maintenance. Find the programmer. "
-                  f"Stopping without asking AutoFocus.")
+                  f"Stopping without marking as written.")
             return
         except Exception as e:
-            print("Uncaught exception from run_parser. Stopping without asking AutoFocus.")
+            print("Uncaught exception from run_parser. Stopping without marking as written.")
             print(e)
             return
         tries_left -= 1
 
-    # Tell update details that downloaded version has been consumed
+    # Tell update details that downloaded version has been consumed.
     ubq = (UpdateByQuery(index='update-details')
            .query('match', version=version)
            .script(source='ctx._source.status=params.status',
                    lang='painless', params={'status':DocStatus.WRITTEN.value}))
     ubq.execute()
 
-    # Process the index before stopping
-    process_index(version)
-
 
 def get_unanalyzed_version_details():
-    '''
-    Get all versions which have been downloaded only
-    '''
+    '''Get all versions which have been downloaded only.'''
     ret_list = []
     unanalyzed_search = Search(index='update-details').query('match', status=1)
     unanalyzed_search.execute()
@@ -260,7 +267,7 @@ def get_unanalyzed_version_details():
 
 
 if __name__ == '__main__':
-    # Download latest release notes
+    # Download latest release notes.
     scraper = FirewallScraper(ip=app.config['FW_IP'], username=app.config['FW_USERNAME'],
                               password=app.config['FW_PASSWORD'],
                               chrome_driver=app.config['DRIVER'],
@@ -269,10 +276,18 @@ if __name__ == '__main__':
                               elastic_ip=app.config['ELASTIC_IP'])
     scraper.full_download()
 
-    versions = get_unanalyzed_version_details()
-    print(f"Analyzing the following versions:")
+    # Parse domains and write them to the database.
+    versions = []
+    # Sometimes the db write for freshly downloaded versions doesn't go through immediately.
+    # Wait for at least those details to be in the database.
+    while scraper.num_new_releases > len(versions):
+        versions = get_unanalyzed_version_details()
+    print(f"Parsing the following versions:")
     print(versions)
     for ver in versions:
         print(f"VERSION {ver['version']} FROM {ver['date']}")
         try_parse(path=f"{app.config['DOWNLOAD_DIR']}/Updates_{ver['version']}.html",
                   version=ver['version'], date=ver['date'])
+
+    # Finally, ask AutoFocus about all unprocessed non-generic domains.
+    process_domains()

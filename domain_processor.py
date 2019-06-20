@@ -35,13 +35,9 @@ sys.path.append('../safe-networking') # TODO: this is Bad and I'm Sorry.
 from project.dns.dnsutils import updateAfStats, getDomainDoc
 from project.dns.dns import DomainDetailsDoc, TagDetailsDoc
 
-import sys # TODO: only for local imports
-sys.path.append('../release_scraper') # TODO: this is Bad and I'm Sorry.
-from scraper import DocStatus
 
 
-
-def process_hit(hit, version):
+def process_hit(hit):
     '''
     Ask AutoFocus about a single domain.
 
@@ -63,31 +59,21 @@ def process_hit(hit, version):
     try:
         tag = document.tags[0][2][0]
         # Write first tag to db.
-        ubq = (UpdateByQuery(index=f"content_{version}")
+        ubq = (UpdateByQuery(index=f"content_*")
                .query('match', domain=hit.domain)
                .script(source='ctx._source.tag=params.tag; ctx._source.processed=1',
                        lang='painless', params={'tag': tag}))
         ubq.execute()
     except (AttributeError, IndexError):
         # No tag available. Regardless, note that we have processed this entry.
-        ubq = (UpdateByQuery(index=f"content_{version}")
+        ubq = (UpdateByQuery(index=f"content_*")
                .query('match', domain=hit.domain)
                .script(source='ctx._source.processed=1', lang='painless'))
         ubq.execute()
 
 
-def process_index(version):
-    '''
-    Use AutoFocus to process all parsed domains in an index.
-
-    Non-keyword arguments:
-    version -- the full version number
-    '''
-    print(f"Processing domains for version {version}.")
-
-    if version is None:
-        print(f"{version} is not a valid version number. Stopping.")
-        return
+def process_domains():
+    '''Use AutoFocus to process all unprocessed non-generic domains in any index.'''
 
     # TODO: I stuck this in here but it's really only necessary if
     # you run this interactively without running the parser first.
@@ -95,7 +81,7 @@ def process_index(version):
     connections.create_connection(host='localhost')
 
     # Search for non-processed and non-generic.
-    new_nongeneric_search = (Search(index=f"content_{version}")
+    new_nongeneric_search = (Search(index=f"content_*")
                              .exclude('term', header='generic')
                              .query('match', processed=0))
     new_nongeneric_search.execute()
@@ -108,7 +94,7 @@ def process_index(version):
         day_af_reqs_left = int(hit.daily_points_remaining / 12)
 
     with Pool() as pool:
-        iterator = pool.imap(partial(process_hit, version=version), new_nongeneric_search.scan())
+        iterator = pool.imap(process_hit, new_nongeneric_search.scan())
         # Write IPs of all matching documents back to test index.
         while True:
             print(f"~{day_af_reqs_left} AutoFocus requests left today.")
@@ -124,10 +110,3 @@ def process_index(version):
                 print(f"Issue getting next domain: {e}")
             # Decrement AF stats.
             day_af_reqs_left -= 1
-
-    # Tell update details that version has been AutoFocused.
-    ubq = (UpdateByQuery(index='update-details')
-           .query('match', version=version)
-           .script(source='ctx._source.status=params.status', lang='painless',
-                   params={'status':DocStatus.AUTOFOCUSED.value}))
-    ubq.execute()

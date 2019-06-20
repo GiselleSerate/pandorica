@@ -66,7 +66,7 @@ class DomainDocument(DocType):
 
     @classmethod
     def from_obj(cls, obj):
-        '''Convert to class.''' # TODO is accurate?
+        '''Convert to class.'''
         return cls(
             id=obj.id,
             domain=obj.domain,

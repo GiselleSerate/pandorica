@@ -111,38 +111,39 @@ class FirewallScraper:
                  binary_location='/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
                  download_dir='contentpacks', elastic_ip='localhost'):
         # Set up session details
-        self.ip = ip
-        self.username = username
-        self.password = password
+        self._ip = ip
+        self._username = username
+        self._password = password
 
         # Set up driver
         chrome_options = Options()
         chrome_options.binary_location = binary_location
-        self.driver = webdriver.Chrome(executable_path=os.path.abspath(chrome_driver),
+        self._driver = webdriver.Chrome(executable_path=os.path.abspath(chrome_driver),
                                        options=chrome_options)
 
         # Init details
-        self.download_dir = download_dir
-        self.versions = []
+        self._download_dir = download_dir
+        self._versions = []
         connections.create_connection(host=elastic_ip)
+        self.num_new_releases = 0
 
 
     def __del__(self):
-        self.driver.close()
+        self._driver.close()
 
 
     def _login(self):
         '''Log into firewall.'''
         # Load firewall login interface.
-        self.driver.get(f'https://{self.ip}')
+        self._driver.get(f'https://{self._ip}')
 
         # Fill login form and submit.
-        user_box = self.driver.find_element_by_id('user') # TODO maybe check this lol idk
-        pwd_box = self.driver.find_element_by_id('passwd')
+        user_box = self._driver.find_element_by_id('user') # TODO maybe check this lol idk
+        pwd_box = self._driver.find_element_by_id('passwd')
         user_box.clear()
-        user_box.send_keys(self.username)
+        user_box.send_keys(self._username)
         pwd_box.clear()
-        pwd_box.send_keys(self.password)
+        pwd_box.send_keys(self._password)
         pwd_box.send_keys(Keys.RETURN)
 
         timeout = 10
@@ -152,8 +153,8 @@ class FirewallScraper:
             timeout -= 1
             try:
                 # Handle alert if we expect it to be there.
-                if(self.username == 'admin' and self.password == 'admin'):
-                    alert_box = self.driver.switch_to.alert
+                if(self._username == 'admin' and self._password == 'admin'):
+                    alert_box = self._driver.switch_to.alert
                     alert_box.accept()
                 return
             except NoAlertPresentException:
@@ -165,34 +166,34 @@ class FirewallScraper:
                     sleep(1)
                 except UnexpectedAlertPresentException:
                     # Alert happened while we were sleeping; handle it.
-                    alert_box = self.driver.switch_to.alert
+                    alert_box = self._driver.switch_to.alert
                     alert_box.accept()
                     return
 
 
     def _find_update_page(self): # TODO: Sometimes we get stuck somewhere in this function. Fix it.
         '''Navigate to get the notes link and details.'''
-        self.driver.get(f'https://{self.ip}')
+        self._driver.get(f'https://{self._ip}')
 
         # Wait for page to load.
         timeout = 500
         try:
             device_tab_present = EC.presence_of_element_located((By.ID, 'device'))
-            WebDriverWait(self.driver, timeout).until(device_tab_present)
+            WebDriverWait(self._driver, timeout).until(device_tab_present)
         except TimeoutException:
             print("Timed out waiting for post-login page to load.")
 
         # Go to device tab.
-        device_tab = self.driver.find_element_by_id('device')
+        device_tab = self._driver.find_element_by_id('device')
         device_tab.click()
 
         # Go to Dynamic Updates.
-        dynamic_updates = self.driver.find_element_by_css_selector("div[ext\\3Atree-node-id='device/dynamic-updates']")
+        dynamic_updates = self._driver.find_element_by_css_selector("div[ext\\3Atree-node-id='device/dynamic-updates']")
         dynamic_updates.click()
 
         # Get latest updates.
-        check_now = self.driver.find_element_by_css_selector("table[itemid='Device/Dynamic Updates-Check Now']")
-        self.driver.execute_script("arguments[0].scrollIntoView(true)", check_now)
+        check_now = self._driver.find_element_by_css_selector("table[itemid='Device/Dynamic Updates-Check Now']")
+        self._driver.execute_script("arguments[0].scrollIntoView(true)", check_now)
 
         # Click as soon as the element is in view.
         while True:
@@ -209,13 +210,13 @@ class FirewallScraper:
         timeout = 500
         try:
             av_table_present = EC.presence_of_element_located((By.ID, 'ext-gen468-gp-type-anti-virus-bd'))
-            WebDriverWait(self.driver, timeout).until(av_table_present)
+            WebDriverWait(self._driver, timeout).until(av_table_present)
         except TimeoutException:
             print('Timed out waiting for updates to load.')
 
-        av_table = self.driver.find_element_by_id('ext-gen468-gp-type-anti-virus-bd')
+        av_table = self._driver.find_element_by_id('ext-gen468-gp-type-anti-virus-bd')
         av_children = av_table.find_elements_by_xpath('*')
-        self.versions = []
+        self._versions = []
         # Iterate all versions
         for child in av_children:
             source = child.get_attribute('innerHTML')
@@ -230,19 +231,21 @@ class FirewallScraper:
             new_ver['link'] = re.search(r'https://downloads\.paloaltonetworks\.com/'
                                         r'virus/AntiVirusExternal-[0-9]*\.html'
                                         r'\?__gda__=[0-9]*_[a-z0-9]*', source).group(0)
-            self.versions.append(new_ver)
+            self._versions.append(new_ver)
 
 
     def _download_latest_release(self):
         '''Download the page source of only the latest release notes.'''
         # Get the absolute latest release notes
-        latest = max(self.versions, key=lambda x: x['date'])
+        self.num_new_releases = 0
+        latest = max(self._versions, key=lambda x: x['date'])
         self._download_release(latest)
 
 
     def _download_all_available_releases(self):
         '''Download the page source for all releases still on the firewall.'''
-        for release in self.versions:
+        self.num_new_releases = 0
+        for release in self._versions:
             self._download_release(release)
 
 
@@ -251,7 +254,8 @@ class FirewallScraper:
         Download the specified release from the firewall if it isn't
         already registered in the database.
         '''
-        for release in self.versions:
+        self.num_new_releases = 0
+        for release in self._versions:
             version_search = (Search(index='update-details')
                               .query('match', version=release['version']))
             version_search.execute()
@@ -265,11 +269,11 @@ class FirewallScraper:
         '''
         Download the specified release from the firewall and notate this in the database.
         '''
-        os.chdir(self.download_dir)
-        self.driver.get(release['link'])
+        os.chdir(self._download_dir)
+        self._driver.get(release['link'])
         filename = f"Updates_{release['version']}.html"
         with open(filename, 'w') as file:
-            file.write(self.driver.page_source)
+            file.write(self._driver.page_source)
 
         # Write version and date to elasticsearch
         version_doc = VersionDocument(meta={'id':release['version']})
@@ -278,6 +282,8 @@ class FirewallScraper:
         version_doc.date = release['date']
         version_doc.status = DocStatus.DOWNLOADED.value
         version_doc.save()
+
+        self.num_new_releases += 1
 
 
     def latest_download(self):
