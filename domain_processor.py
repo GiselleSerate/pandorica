@@ -49,13 +49,13 @@ def process_hit(hit, version):
     hit -- a domain to process
     version -- the full version number
     '''
-    print(f'Looking up tags for {hit.domain} . . .')
+    print(f"Looking up tags for {hit.domain} . . .")
 
     try:
         # Make an autofocus request.
         document = getDomainDoc(hit.domain)
     except Exception as e:
-        print(f'Issue with getting the domain document: {e}')
+        print(f"Issue with getting the domain document: {e}")
         return
 
     print(f'Finished {hit.domain}.')
@@ -63,16 +63,16 @@ def process_hit(hit, version):
     try:
         tag = document.tags[0][2][0]
         # Write first tag to db.
-        ubq = (UpdateByQuery(index=f'content_{version}')
-               .query("match", domain=hit.domain)
-               .script(source="ctx._source.tag=params.tag; ctx._source.processed=1",
-                       lang="painless", params={'tag': tag}))
+        ubq = (UpdateByQuery(index=f"content_{version}")
+               .query('match', domain=hit.domain)
+               .script(source='ctx._source.tag=params.tag; ctx._source.processed=1',
+                       lang='painless', params={'tag': tag}))
         ubq.execute()
     except (AttributeError, IndexError):
         # No tag available. Regardless, note that we have processed this entry.
-        ubq = (UpdateByQuery(index=f'content_{version}')
-               .query("match", domain=hit.domain)
-               .script(source="ctx._source.processed=1", lang="painless"))
+        ubq = (UpdateByQuery(index=f"content_{version}")
+               .query('match', domain=hit.domain)
+               .script(source='ctx._source.processed=1', lang='painless'))
         ubq.execute()
 
 
@@ -83,10 +83,10 @@ def process_index(version):
     Non-keyword arguments:
     version -- the full version number
     '''
-    print(f'Processing domains for version {version}.')
+    print(f"Processing domains for version {version}.")
 
     if version is None:
-        print(f'{version} is not a valid version number. Stopping.')
+        print(f"{version} is not a valid version number. Stopping.")
         return
 
     # TODO: I stuck this in here but it's really only necessary if
@@ -95,7 +95,7 @@ def process_index(version):
     connections.create_connection(host='localhost')
 
     # Search for non-processed and non-generic.
-    new_nongeneric_search = (Search(index=f'content_{version}')
+    new_nongeneric_search = (Search(index=f"content_{version}")
                              .exclude('term', header='generic')
                              .query('match', processed=0))
     new_nongeneric_search.execute()
@@ -111,17 +111,17 @@ def process_index(version):
         iterator = pool.imap(partial(process_hit, version=version), new_nongeneric_search.scan())
         # Write IPs of all matching documents back to test index.
         while True:
-            print(f'~{day_af_reqs_left} AutoFocus requests left today.')
+            print(f"~{day_af_reqs_left} AutoFocus requests left today.")
             if day_af_reqs_left < 1:
                 # Not enough points to do more today.
                 return
             try:
                 next(iterator)
             except StopIteration:
-                print('No more domains to process.')
+                print("No more domains to process.")
                 return
             except Exception as e:
-                print(f'Issue getting next domain: {e}')
+                print(f"Issue getting next domain: {e}")
             # Decrement AF stats.
             day_af_reqs_left -= 1
 

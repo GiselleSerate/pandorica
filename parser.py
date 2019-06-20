@@ -62,14 +62,14 @@ app.config.from_object('config.DebugConfig')
 
 def parse_and_write(soup, string_name, pattern, array, version, thread_status): # TODO update docstrings lollll
     '''
-    Pulls all domains of one type from the soup
-    and then writes them to the database.
-    :param str string_name: The string representation of the type of docs
-    :param regex pattern: The section header pattern to find in the soup
-    :param list array: The array to put items in after they have been parsed
-    :param string version: The update version (also the index to write to)
-    :param list thread_status: A list to write to on proper return
+    Pulls all domains of one type from the soup and then writes them to the database.
 
+    Keyword arguments:
+    string_name -- the string representation of the type of docs
+    pattern -- the section header pattern to find in the soup
+    array -- the array to put items in after they have been parsed
+    version -- the update version (also the index to write to)
+    thread_status -- a list to write to on proper return
     '''
     # Pull out a list of tds from parse tree
     try:
@@ -81,15 +81,15 @@ def parse_and_write(soup, string_name, pattern, array, version, thread_status): 
         for td in tds:
             raw_scrape = td.string
             # Extract domains from "Suspicious DNS Query" parentheses
-            result = re.search('\((.*)\)', raw_scrape)
+            result = re.search(r'\((.*)\)', raw_scrape)
             if result is None:
                 array.append(raw_scrape)
             else:
                 array.append(result.group(1))
 
-        print(f'{len(array)} domains {string_name}, like {array[:3]}')
+        print(f"{len(array)} domains {string_name}, like {array[:3]}")
     except Exception as e:
-        print(f'Parse of {string_name} failed. Are you sure this HTML file is the right format?')
+        print(f"Parse of {string_name} failed. Are you sure this HTML file is the right format?")
         print(e)
         # If we can't parse out domains, don't write to the db; suggests a fundamental document
         # format change requiring more maintenance than a simple retry. Get a human to look at this.
@@ -98,24 +98,24 @@ def parse_and_write(soup, string_name, pattern, array, version, thread_status): 
     # Write domains of all relevant documents back to index
     print(f'Writing {string_name} domains to database . . .')
     for raw in array:
-        splitRaw = raw.split(':')
-        domain = splitRaw[1]
-        splitHeader = splitRaw[0].split('.')
+        split_raw = raw.split(':')
+        domain = split_raw[1]
+        split_header = split_raw[0].split('.')
         # Create new DomainDocument in db
-        myDoc = DomainDocument(meta={'id':domain})
-        myDoc.meta.index = f'content_{version}'
-        myDoc.raw = raw
-        myDoc.header = splitRaw[0]
-        myDoc.threatType = splitHeader[0]
-        myDoc.threatClass = splitHeader[1] if len(splitHeader) > 1 else None
-        myDoc.domain = splitRaw[1]
-        myDoc.action = string_name
-        myDoc.processed = 0
+        domain_doc = DomainDocument(meta={'id':domain})
+        domain_doc.meta.index = f'content_{version}'
+        domain_doc.raw = raw
+        domain_doc.header = split_raw[0]
+        domain_doc.threatType = split_header[0]
+        domain_doc.threatClass = split_header[1] if len(split_header) > 1 else None
+        domain_doc.domain = split_raw[1]
+        domain_doc.action = string_name
+        domain_doc.processed = 0
 
         try:
-            myDoc.save()
+            domain_doc.save()
         except Exception as e:
-            print('Saving domain failed; check connection to database and retry.')
+            print("Saving domain failed; check connection to database and retry.")
             print(e)
             raise RetryException # Retry immediately
 
@@ -127,10 +127,6 @@ def run_parser(path, version, date):
     '''
     Get file with the path passed, parse, and write to database.
     '''
-
-    # Compile regexes for section headers
-    added_pattern = re.compile(app.config['ADD_REGEX'])
-    removed_pattern = re.compile(app.config['REM_REGEX'])
 
     # Domains get stored here
     added = []
@@ -168,7 +164,8 @@ def run_parser(path, version, date):
             for hit in meta_search:
                 complete = hit.status >= DocStatus.WRITTEN.value
             if complete:
-                print("This version has already been written to the database. Not rewriting the base index.")
+                print("This version has already been written to the database. "
+                      "Not rewriting the base index.")
                 return # Everything's fine, no need to retry
             # Last write was incomplete; delete the index and start over
             print('Clearing index.')
@@ -188,19 +185,21 @@ def run_parser(path, version, date):
 
     # Start threads for adds and removes
     added_thread = Thread(target=parse_and_write,
-                          args=(soup, 'added', added_pattern, added, version, thread_status))
+                          args=(soup, 'added', re.compile(app.config['ADD_REGEX']),
+                                added, version, thread_status))
     added_thread.start()
     removed_thread = Thread(target=parse_and_write,
-                            args=(soup, 'removed', removed_pattern, removed, version, thread_status))
+                            args=(soup, 'removed', re.compile(app.config['REM_REGEX']),
+                                  removed, version, thread_status))
     removed_thread.start()
     added_thread.join()
     removed_thread.join()
 
     # Make sure both threads are okay before committing
     if len(thread_status) < 2:
-        print(f'Incomplete run. Please retry. Only wrote {thread_status} to the database.')
+        print(f"Incomplete run. Please retry. Only wrote {thread_status} to the database.")
     else:
-        print(f'Finished writing to database.')
+        print(f"Finished writing to database.")
 
 
 def try_parse(path, version, date):
@@ -217,19 +216,19 @@ def try_parse(path, version, date):
     while retry:
         retry = False
         if tries_left < 1:
-            print('Ran out of retries. Stopping without asking AutoFocus.')
+            print("Ran out of retries. Stopping without asking AutoFocus.")
             return
         try:
             run_parser(path=path, version=version, date=date)
         except RetryException:
-            print(f'Script failed, retrying. (Will try again {tries_left} times before giving up.)')
+            print(f"Script failed, retrying. (Will try again {tries_left} times before giving up.)")
             retry = True
         except MaintenanceException:
             print(f"Script may need maintenance. Find the programmer. "
                   f"Stopping without asking AutoFocus.")
             return
         except Exception as e:
-            print('Uncaught exception from run_parser. Stopping without asking AutoFocus.')
+            print("Uncaught exception from run_parser. Stopping without asking AutoFocus.")
             print(e)
             return
         tries_left -= 1
@@ -263,15 +262,17 @@ def get_unanalyzed_version_details():
 if __name__ == '__main__':
     # Download latest release notes
     scraper = FirewallScraper(ip=app.config['FW_IP'], username=app.config['FW_USERNAME'],
-                              password=app.config['FW_PASSWORD'], chrome_driver=app.config['DRIVER'],
+                              password=app.config['FW_PASSWORD'],
+                              chrome_driver=app.config['DRIVER'],
                               binary_location=app.config['BINARY_LOCATION'],
-                              download_dir=app.config['DOWNLOAD_DIR'], elastic_ip=app.config['ELASTIC_IP'])
+                              download_dir=app.config['DOWNLOAD_DIR'],
+                              elastic_ip=app.config['ELASTIC_IP'])
     scraper.full_download()
 
-    details = get_unanalyzed_version_details()
+    versions = get_unanalyzed_version_details()
     print(f"Analyzing the following versions:")
-    print(details)
-    for version in details:
-        print(f"VERSION {version['version']} FROM {version['date']}")
-        try_parse(path=f'{app.config["DOWNLOAD_DIR"]}/Updates_{version["version"]}.html',
-                  version=version['version'], date=version['date'])
+    print(versions)
+    for ver in versions:
+        print(f"VERSION {ver['version']} FROM {ver['date']}")
+        try_parse(path=f"{app.config['DOWNLOAD_DIR']}/Updates_{ver['version']}.html",
+                  version=ver['version'], date=ver['date'])

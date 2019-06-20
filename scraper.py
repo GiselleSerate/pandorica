@@ -50,9 +50,7 @@ app.config.from_object('config.DebugConfig')
 
 @unique
 class DocStatus(IntEnum):
-    '''
-    Defines document statuses
-    '''
+    '''Defines document statuses.'''
     DOWNLOADED = 1
     WRITTEN = 2
     AUTOFOCUSED = 3
@@ -60,9 +58,7 @@ class DocStatus(IntEnum):
 
 
 class VersionDocument(DocType):
-    '''
-    Update metadata document
-    '''
+    '''Contains update metadata.'''
     id = Text(analyzer='snowball', fields={'raw': Keyword()})
     shortversion = Text()
     version = Text()
@@ -76,11 +72,13 @@ class VersionDocument(DocType):
 
     @classmethod
     def get_indexable(cls):
+        '''Getter for objects.'''
         return cls.get_model().get_objects()
 
 
     @classmethod
     def from_obj(cls, obj):
+        '''Convert to class.'''
         return cls(
             id=obj.id,
             shortversion=obj.shortversion,
@@ -96,7 +94,18 @@ class VersionDocument(DocType):
 
 
 class FirewallScraper:
-    '''A web scraping utility that downloads release notes from a firewall.'''
+    '''A web scraping utility that downloads release notes from a firewall.
+
+    Non-keyword arguments:
+    ip -- the IP of the firewall to scrape
+    username -- the firewall username
+    password -- the firewall password
+    chrome_driver -- the name of the Chrome driver to use
+    binary_location -- the path to the Chrome binary
+    download_dir -- where to download the notes to
+    elastic_ip -- the IP of the database
+
+    '''
     def __init__(self, ip, username, password,
                  chrome_driver='chromedriver',
                  binary_location='/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
@@ -171,7 +180,7 @@ class FirewallScraper:
             device_tab_present = EC.presence_of_element_located((By.ID, 'device'))
             WebDriverWait(self.driver, timeout).until(device_tab_present)
         except TimeoutException:
-            print('Timed out waiting for post-login page to load.')
+            print("Timed out waiting for post-login page to load.")
 
         # Go to device tab.
         device_tab = self.driver.find_element_by_id('device')
@@ -288,7 +297,9 @@ class FirewallScraper:
 
 if __name__ == '__main__':
     scraper = FirewallScraper(ip=app.config['FW_IP'], username=app.config['FW_USERNAME'],
-                              password=app.config['FW_PASSWORD'], chrome_driver=app.config['DRIVER'],
-                              binary_location=app.config['BINARY_LOCATION'], download_dir=app.config['DOWNLOAD_DIR'],
+                              password=app.config['FW_PASSWORD'],
+                              chrome_driver=app.config['DRIVER'],
+                              binary_location=app.config['BINARY_LOCATION'],
+                              download_dir=app.config['DOWNLOAD_DIR'],
                               elastic_ip=app.config['ELASTIC_IP'])
     scraper.full_download()
