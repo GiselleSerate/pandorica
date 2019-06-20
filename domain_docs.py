@@ -53,11 +53,6 @@ class DomainDocument(DocType):
     processed = Integer()
 
 
-    class Index:
-        '''TODO do we need?'''
-        name = 'placeholder'
-
-
     @classmethod
     def get_indexable(cls):
         '''Getter for objects.'''

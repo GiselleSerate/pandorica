@@ -67,6 +67,7 @@ class VersionDocument(DocType):
 
 
     class Index:
+        '''Defines the index to send documents to.'''
         name = 'update-details'
 
 

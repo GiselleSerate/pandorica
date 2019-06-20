@@ -25,7 +25,6 @@ This software is provided without support, warranty, or guarantee.
 Use at your own risk.
 '''
 
-from functools import partial
 from multiprocessing import Pool
 
 from elasticsearch_dsl import connections, Search, UpdateByQuery
@@ -33,7 +32,6 @@ from elasticsearch_dsl import connections, Search, UpdateByQuery
 import sys # TODO: only for local imports
 sys.path.append('../safe-networking') # TODO: this is Bad and I'm Sorry.
 from project.dns.dnsutils import updateAfStats, getDomainDoc
-from project.dns.dns import DomainDetailsDoc, TagDetailsDoc
 
 
 

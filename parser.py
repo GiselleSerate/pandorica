@@ -74,8 +74,7 @@ def parse_and_write(soup, string_name, pattern, array, version, thread_status):
     # Pull out a list of tds from parse tree
     try:
         header = soup.find('h3', text=pattern)
-        table = header.find_next_sibling('table')
-        tds = table.find_all('td')
+        tds = header.find_next_sibling('table').find_all('td')
 
         # Get domains from table entries
         for td in tds:
