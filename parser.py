@@ -1,27 +1,44 @@
-from datetime import datetime
-from functools import partial
-from logging.config import dictConfig
-from multiprocessing import Pool
+# Copyright (c) 2019, Palo Alto Networks
+#
+# Permission to use, copy, modify, and/or distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+# OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+# Author: Giselle Serate <gserate@paloaltonetworks.com>
+
+'''
+Palo Alto Networks parser.py
+
+Downloads and parses new version notes, then writes domains to Elasticsearch with autofocus details.
+
+Run this file with the config.py set as in the README.md.
+
+This software is provided without support, warranty, or guarantee.
+Use at your own risk.
+'''
+
 import re
-import sys
+import logging
+from logging.config import dictConfig
 from threading import Thread
-from time import sleep
 
 from bs4 import BeautifulSoup
-from elasticsearch_dsl import DocType, Boolean, Date, Keyword, Text, connections, Index, Search, UpdateByQuery
+from elasticsearch_dsl import connections, Index, Search, UpdateByQuery
 from flask import Flask
-from flask.logging import default_handler
-import urllib.request
 
-import sys # TODO: only for local imports
-sys.path.append('../content_downloader') # TODO: this is Bad and I'm Sorry.
-from content_downloader import ContentDownloader
+from domain_docs import RetryException, MaintenanceException, DomainDocument
+from domain_processor import process_domains
+from scraper import DocStatus, FirewallScraper
 
-sys.path.append('../safe-networking') # TODO: this is Bad and I'm Sorry.
-from project.dns.dnsutils import updateAfStats, getDomainDoc
-from project.dns.dns import DomainDetailsDoc, TagDetailsDoc
 
-version = None
 
 dictConfig({
     'version': 1,
@@ -41,287 +58,102 @@ dictConfig({
 
 # Configuration
 app = Flask(__name__)
-app.config.from_object('config.DebugConfig') # TODO I don't even know
-# app.logger.removeHandler(default_handler)
+app.config.from_object('config.DebugConfig')
 
-class RetryException(Exception):
+
+
+def parse_and_write(soup, string_name, pattern, array, version, thread_status):
     '''
-    Raised when the action should be retried
-    '''
-    pass
+    Pulls all domains of one type from the soup and then writes them to the database.
 
-class MaintenanceException(Exception):
-    '''
-    Raised when the script may be now obsolete due to format changes, etc
-    '''
-    pass
-
-class MetaDocument(DocType):
-    '''
-    Unique class for writing metadata to an index
-    '''
-    id = Text(analyzer='snowball', fields={'raw': Keyword()})
-    metadoc = Text()
-    complete = Boolean()
-    version = Text()
-    date = Date()
-
-    class Index:
-        name = 'placeholder'
-
-    @classmethod
-    def get_indexable(cls):
-        return cls.get_model().get_objects()
-
-    @classmethod
-    def from_obj(cls, obj):
-        return cls(
-            id=obj.id,
-            metadoc=obj.metadoc,
-            complete=obj.complete,
-            version=obj.version,
-            date=obj.date,
-            )
-
-    def save(self, **kwargs):
-        return super(MetaDocument, self).save(**kwargs)
-
-class DomainDocument(DocType):
-    '''
-    Class for writing domains back to the database
-    '''
-    # Use domain as id
-    id = Text(analyzer='snowball', fields={'raw': Keyword()})
-    domain = Keyword()
-    raw = Keyword()
-    header = Keyword()
-    threatType = Keyword()
-    threatClass = Keyword()
-    action = Text()
-    tags = Text(multi=True)
-    processed = Boolean()
-
-    class Index:
-        name = 'placeholder'
-
-    @classmethod
-    def get_indexable(cls):
-        return cls.get_model().get_objects()
-
-    @classmethod
-    def from_obj(cls, obj):
-        return cls(
-            id=obj.id,
-            domain=obj.domain,
-            raw=obj.raw,
-            header=obj.header,
-            threatType=obj.threatType,
-            threatClass=obj.threatClass,
-            action=obj.action,
-            tags=obj.tags,
-            processed=obj.processed,
-            )
-
-    def save(self, **kwargs):
-        return super(DomainDocument, self).save(**kwargs)
-
-
-class ContentDownloaderWithDate(ContentDownloader):
-    '''
-    Extend ContentDownloader to provide the update date
-    '''
-    def find_latest_update(self, updates):
-        '''
-        Extend function to additionally return update date
-        as its last argument
-        '''
-        updates_of_type = [u for u in updates if u['Key'] == self.key]
-        updates_sorted = sorted(updates_of_type, key=lambda x: datetime.strptime(x['ReleaseDate'], '%Y-%m-%dT%H:%M:%S'))
-        latest = updates_sorted[-1]
-        return latest[self.filename_string], latest['FolderName'], latest['VersionNumber'], latest['ReleaseDate']
-
-
-def parseAndWrite(soup, stringName, pattern, array, version, threadStatus):
-    '''
-    Pulls all domains of one type from the soup
-    and then writes them to the database.
-    :param str stringName: The string representation of the type of docs
-    :param regex pattern: The section header pattern to find in the soup
-    :param list array: The array to put items in after they have been parsed
-    :param string version: The update version (also the index to write to)
-    :param list threadStatus: A list to write to on proper return
-
+    Keyword arguments:
+    string_name -- the string representation of the type of docs
+    pattern -- the section header pattern to find in the soup
+    array -- the array to put items in after they have been parsed
+    version -- the update version (also the index to write to)
+    thread_status -- a list to write to on proper return
     '''
     # Pull out a list of tds from parse tree
     try:
         header = soup.find('h3', text=pattern)
-        table = header.find_next_sibling('table')
-        tds = table.find_all('td')
+        tds = header.find_next_sibling('table').find_all('td')
 
         # Get domains from table entries
         for td in tds:
-            rawScrape = td.string
-            result = re.search('\((.*)\)', rawScrape) # Extract domains from "Suspicious DNS Query" parentheses
-            if result == None:
-                array.append(rawScrape)
+            raw_scrape = td.string
+            # Extract domains from "Suspicious DNS Query" parentheses
+            result = re.search(r'\((.*)\)', raw_scrape)
+            if result is None:
+                array.append(raw_scrape)
             else:
                 array.append(result.group(1))
 
-        print(f'{len(array)} domains {stringName}, like {array[:3]}')
+        logging.debug(f"{len(array)} domains {string_name}, like {array[:3]}")
     except Exception as e:
-        print(f'Parse of {stringName} failed. Are you sure this HTML file is the right format?')
-        print(e)
-        # If we can't parse out domains, don't write to the db; suggests a fundamental document 
-        # format change requiring more maintenance than a simple retry. Get a human to look at this. 
+        logging.error(f"Parse of {string_name} failed. "
+                      "Are you sure this HTML file is the right format?")
+        logging.error(e)
+        # If we can't parse out domains, don't write to the db; suggests a fundamental document
+        # format change requiring more maintenance than a simple retry. Get a human to look at this.
         raise MaintenanceException
 
     # Write domains of all relevant documents back to index
-    print(f'Writing {stringName} domains to database . . .')
+    logging.info(f'Writing {string_name} domains to database . . .')
     for raw in array:
-        splitRaw = raw.split(':')
-        domain = splitRaw[1]
-        splitHeader = splitRaw[0].split('.')
+        split_raw = raw.split(':')
+        domain = split_raw[1]
+        split_header = split_raw[0].split('.')
         # Create new DomainDocument in db
-        myDoc = DomainDocument(meta={'id':domain})
-        myDoc.meta.index = f'content_{version}'
-        myDoc.raw = raw
-        myDoc.header = splitRaw[0]
-        myDoc.threatType = splitHeader[0]
-        myDoc.threatClass = splitHeader[1] if len(splitHeader) > 1 else None
-        myDoc.domain = splitRaw[1]
-        myDoc.action = stringName
-        myDoc.processed = 0
+        domain_doc = DomainDocument(meta={'id':domain})
+        domain_doc.meta.index = f'content_{version}'
+        domain_doc.raw = raw
+        domain_doc.header = split_raw[0]
+        domain_doc.threatType = split_header[0]
+        domain_doc.threatClass = split_header[1] if len(split_header) > 1 else None
+        domain_doc.domain = split_raw[1]
+        domain_doc.action = string_name
+        domain_doc.processed = 0
 
         try:
-            myDoc.save()
+            domain_doc.save()
         except Exception as e:
-            print('Saving domain failed; check connection to database and retry.')
-            print(e)
+            logging.error("Saving domain failed; check connection to database and retry.")
+            logging.error(e)
             raise RetryException # Retry immediately
 
-    print(f'Finished writing {stringName} domains.')
-    threadStatus.append(stringName)
+    logging.info(f'Finished writing {string_name} domains.')
+    thread_status.append(string_name)
 
 
-def processHit(hit, version):
-    # Make an autofocus request
-    print(f'Looking up tags for {hit.domain} . . .')
-    retry = True
-    while(retry):
-        try:
-            document = getDomainDoc(hit.domain)
-            retry = False
-        except Exception as e:
-            print(f'Issue with getting the domain document: {e}')
-            retry = True
-
-    print(f'Got tags for {hit.domain}.')
-
-    try:
-        tag = document.tags[0][2][0]
-        # Write first tag to db
-        ubq = UpdateByQuery(index=f'content_{version}')     \
-              .query("match", domain=hit.domain)            \
-              .script(source="ctx._source.tag=params.tag; ctx._source.processed=true", lang="painless", params={'tag': tag})
-    except AttributeError: 
-        # No tag available. Regardless, note that we have processed this entry
-        ubq = UpdateByQuery(index=f'content_{version}')     \
-              .query("match", domain=hit.domain)            \
-              .script(source="ctx._source.processed=true", lang="painless")
-
-    response = ubq.execute()
-
-
-def processIndex(version):
+def run_parser(path, version, date):
     '''
-    Use AF to process parsed domains
+    Get file with the path passed, parse, and write to database.
+
+    Non-keyword arguments:
+    path -- the local path to the release notes (may be relative)
+    version -- the full version number
+    date -- the release date
+
     '''
-    if(version == None):
-        print(f'{version} is not a valid version number. Stopping.')
-        return
-
-    # Search for non-processed and non-generic
-    newNonGenericSearch = Search(index=f'content_{version}').exclude('term', header='generic').query('match', processed=False)
-    newNonGenericSearch.execute()
-
-    # Determine how many AutoFocus points we have
-    updateAfStats()
-    afStatsSearch = Search(index='af-details')
-    afStatsSearch.execute()
-    for hit in afStatsSearch:
-        dayAfReqsLeft = int(hit.daily_points_remaining / 12)
-
-    with Pool() as pool:
-        it = pool.imap(partial(processHit, version=version), newNonGenericSearch.scan())
-        # Write IPs of all matching documents back to test index
-        while True:
-            print(f'~{dayAfReqsLeft} AutoFocus requests left today.')
-            if(dayAfReqsLeft < 1):
-                return # Nothing more to do today. 
-            try:
-                next(it)
-            except StopIteration as si:
-                print('No more domains to process.')
-                return
-            except Exception as e:
-                print(f'Issue getting next domain: {e}')
-            # Decrement AF stats
-            dayAfReqsLeft -= 1
-
-
-
-def runParser():
-    '''
-    Download file from support portal, parse, and write to database. 
-    '''
-    global version
-
-    # Compile regexes for section headers
-    addedPattern = re.compile(app.config['ADD_REGEX'])
-    removedPattern = re.compile(app.config['REM_REGEX'])
 
     # Domains get stored here
     added = []
     removed = []
 
-
-    print(f'Retrieving latest release notes from support portal . . .')
-
-    username = app.config['USERNAME']
-    password = app.config['PASSWORD']
-
-    # Create contentdownloader object to get AV release notes
-    downloader = ContentDownloaderWithDate(username=username, password=password, package='antivirus',
-                                           debug=False, isReleaseNotes=True)
-
-    # Check latest version. Login if necessary.
-    token, updates = downloader.check()
-
-    # Determine latest update
-    filename, foldername, latestversion, date = downloader.find_latest_update(updates)
-
-    # version = 'foobar'
-    version = latestversion
-
-    # Get download URL
-    fileurl = downloader.get_download_link(token, filename, foldername)
-
-    # Get HTML file to parse
     try:
-        data = urllib.request.urlopen(fileurl)
-    except urllib.error.URLError:
-        print(f'Updates failed to download from {fileurl}')
-        raise RetryException # Retry immediately
-
+        data = open(path)
+    except Exception as e:
+        logging.error(f'Issue opening provided file at {path}.')
+        raise e # Reraise so the script stops
 
     # Parse file
     soup = BeautifulSoup(data, 'html5lib')
 
 
     # Establish database connection (port 9200 by default)
-    connections.create_connection(host=app.config['HOST_IP'])
+    connections.create_connection(host=app.config['ELASTIC_IP'])
 
-    print(f'Writing updates for latest version: {version} (released {date}).')
+    logging.info(f'Writing updates for version {version} (released {date}).')
 
     # Establish index to write to
     index = Index(f'content_{version}')
@@ -329,91 +161,134 @@ def runParser():
     # Stop if we've written this fully before; delete if it was a partial write
     try:
         if index.exists():
-            # Search for metadoc complete
-            metaSearch = Search(index=f'content_{version}').query('match', metadoc=True)
-            response = metaSearch.execute()
-            for hit in metaSearch:
-                complete = hit.complete
+            # Search for metadoc to see if it was fully written
+            meta_search = (Search(index='update-details')
+                           .query('match', version=version))
+            meta_search.execute()
+            complete = 0 # By default, assume incomplete
+            for hit in meta_search:
+                complete = hit.status >= DocStatus.WRITTEN.value
             if complete:
-                print('This version has already been written to the database. Stopping.')
+                logging.info("This version has already been written to the database. "
+                             "Not rewriting the base index.")
                 return # Everything's fine, no need to retry
-            else:
-                # Last write was incomplete; delete the index and start over
-                print('Clearing index.')
-                index.delete()
+            # Last write was incomplete; delete the index and start over
+            logging.info('Clearing index.')
+            index.delete()
     except Exception as e:
-        print('Issue with the existing index. Try checking your connection or manually deleting the index and retry.')
-        print(e)
+        logging.error("Issue with the existing index. Try checking your connection or "
+                      "manually deleting the index and retry.")
+        logging.error(e)
         raise RetryException # Retry immediately
 
     # Create new index
     index.create()
 
-    # Create new MetaDocument in db
-    myDoc = MetaDocument()
-    myDoc.meta.index = f'content_{version}'
-    myDoc.metadoc = True
-    myDoc.complete = False
-    myDoc.version = version
-    myDoc.date = date
-    try:
-        myDoc.save()
-    except Exception as e:
-        print('Saving metadocument failed; check connection to database and retry.')
-        print(e)
-        raise RetryException # Retry immediately
-
 
     # Status gets stored here
-    threadStatus = []
+    thread_status = []
 
     # Start threads for adds and removes
-    addedThread = Thread(target=parseAndWrite, args=(soup, 'added', addedPattern, added, version, threadStatus))
-    addedThread.start()
-    removedThread = Thread(target=parseAndWrite, args=(soup, 'removed', removedPattern, removed, version, threadStatus))
-    removedThread.start()
-    addedThread.join()
-    removedThread.join()
+    added_thread = Thread(target=parse_and_write,
+                          args=(soup, 'added', re.compile(app.config['ADD_REGEX']),
+                                added, version, thread_status))
+    added_thread.start()
+    removed_thread = Thread(target=parse_and_write,
+                            args=(soup, 'removed', re.compile(app.config['REM_REGEX']),
+                                  removed, version, thread_status))
+    removed_thread.start()
+    added_thread.join()
+    removed_thread.join()
 
     # Make sure both threads are okay before committing
-    if(len(threadStatus) < 2):
-        print(f'Incomplete run. Please retry. Only wrote {threadStatus} to the database.')
+    if len(thread_status) < 2:
+        logging.error(f"Incomplete run. Please retry. Only wrote {thread_status} to the database.")
     else:
-        try:
-            # Finish by committing
-            ubq = UpdateByQuery(index=f'content_{version}')     \
-                  .query("match", metadoc=True)                 \
-                  .script(source="ctx._source.complete=true", lang="painless")
-            response = ubq.execute()
-        except Exception as e:
-            print('Failed to tell database that index was complete. Retry.')
-            print(e)
-            raise RetryException # Retry immediately
-
-        print(f'Finished writing to database.')
+        logging.info(f"Finished writing to database.")
 
 
-def tryParse():
-    triesLeft = app.config['NUM_TRIES']
+def try_parse(path, version, date):
+    '''
+    Retry parse repeatedly.
+
+    Non-keyword arguments:
+    path -- the local path to the release notes (may be relative)
+    version -- the full version number
+    date -- the release date
+
+    '''
+    try:
+        tries_left = int(app.config['NUM_TRIES'])
+    except ValueError:
+        # Can't convert to an int; use a default.
+        tries_left = 5
+
     retry = True
-    while retry and triesLeft > 0:
+    while retry:
         retry = False
+        if tries_left < 1:
+            logging.error("Ran out of retries. Stopping without marking as written.")
+            return
         try:
-            runParser()
+            run_parser(path=path, version=version, date=date)
         except RetryException:
-            print('Script failed, retrying.')
+            logging.error(f"Script failed, retrying. "
+                          f"(Will try again {tries_left} times before giving up.)")
             retry = True
         except MaintenanceException:
-            print('Script may need maintenance. Find the programmer. Stopping without asking AutoFocus.')
+            logging.error("Script may need maintenance. Find the programmer. "
+                          "Stopping without marking as written.")
             return
         except Exception as e:
-            print('Uncaught exception from runParser. Stopping without asking AutoFocus.')
-            print(e)
+            logging.error("Uncaught exception from run_parser. "
+                          "Stopping without marking as written.")
+            logging.error(e)
             return
-        triesLeft -= 1
-    
-    # Process the index before you stop
-    processIndex(version)
+        tries_left -= 1
+
+    # Tell update details that downloaded version has been consumed.
+    ubq = (UpdateByQuery(index='update-details')
+           .query('match', version=version)
+           .script(source='ctx._source.status=params.status',
+                   lang='painless', params={'status':DocStatus.WRITTEN.value}))
+    ubq.execute()
+
+
+def get_unanalyzed_version_details():
+    '''Get all versions which have been downloaded only.'''
+    ret_list = []
+    unanalyzed_search = Search(index='update-details').query('match', status=1)
+    unanalyzed_search.execute()
+    for hit in unanalyzed_search:
+        obj = {}
+        obj['version'] = hit.version
+        obj['date'] = hit.date
+        ret_list.append(obj)
+    return ret_list
+
 
 if __name__ == '__main__':
-    tryParse()
+    # Download latest release notes.
+    scraper = FirewallScraper(ip=app.config['FW_IP'], username=app.config['FW_USERNAME'],
+                              password=app.config['FW_PASSWORD'],
+                              chrome_driver=app.config['DRIVER'],
+                              binary_location=app.config['BINARY_LOCATION'],
+                              download_dir=app.config['DOWNLOAD_DIR'],
+                              elastic_ip=app.config['ELASTIC_IP'])
+    scraper.full_download()
+
+    # Parse domains and write them to the database.
+    versions = []
+    # Sometimes the db write for freshly downloaded versions doesn't go through immediately.
+    # Wait for at least those details to be in the database.
+    while scraper.num_new_releases > len(versions):
+        versions = get_unanalyzed_version_details()
+    logging.info(f"Parsing the following versions:")
+    logging.info(versions)
+    for ver in versions:
+        logging.info(f"VERSION {ver['version']} FROM {ver['date']}")
+        try_parse(path=f"{app.config['DOWNLOAD_DIR']}/Updates_{ver['version']}.html",
+                  version=ver['version'], date=ver['date'])
+
+    # Finally, ask AutoFocus about all unprocessed non-generic domains.
+    process_domains()
