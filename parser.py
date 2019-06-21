@@ -26,6 +26,7 @@ Use at your own risk.
 '''
 
 import re
+import logging
 from logging.config import dictConfig
 from threading import Thread
 
@@ -60,6 +61,7 @@ app = Flask(__name__)
 app.config.from_object('config.DebugConfig')
 
 
+
 def parse_and_write(soup, string_name, pattern, array, version, thread_status):
     '''
     Pulls all domains of one type from the soup and then writes them to the database.
@@ -86,16 +88,17 @@ def parse_and_write(soup, string_name, pattern, array, version, thread_status):
             else:
                 array.append(result.group(1))
 
-        print(f"{len(array)} domains {string_name}, like {array[:3]}")
+        logging.debug(f"{len(array)} domains {string_name}, like {array[:3]}")
     except Exception as e:
-        print(f"Parse of {string_name} failed. Are you sure this HTML file is the right format?")
-        print(e)
+        logging.error(f"Parse of {string_name} failed. "
+                      "Are you sure this HTML file is the right format?")
+        logging.error(e)
         # If we can't parse out domains, don't write to the db; suggests a fundamental document
         # format change requiring more maintenance than a simple retry. Get a human to look at this.
         raise MaintenanceException
 
     # Write domains of all relevant documents back to index
-    print(f'Writing {string_name} domains to database . . .')
+    logging.info(f'Writing {string_name} domains to database . . .')
     for raw in array:
         split_raw = raw.split(':')
         domain = split_raw[1]
@@ -114,11 +117,11 @@ def parse_and_write(soup, string_name, pattern, array, version, thread_status):
         try:
             domain_doc.save()
         except Exception as e:
-            print("Saving domain failed; check connection to database and retry.")
-            print(e)
+            logging.error("Saving domain failed; check connection to database and retry.")
+            logging.error(e)
             raise RetryException # Retry immediately
 
-    print(f'Finished writing {string_name} domains.')
+    logging.info(f'Finished writing {string_name} domains.')
     thread_status.append(string_name)
 
 
@@ -137,13 +140,10 @@ def run_parser(path, version, date):
     added = []
     removed = []
 
-
-    print('Opening release notes.')
-
     try:
         data = open(path)
     except Exception as e:
-        print(f'Issue opening provided file at {path}.')
+        logging.error(f'Issue opening provided file at {path}.')
         raise e # Reraise so the script stops
 
     # Parse file
@@ -153,7 +153,7 @@ def run_parser(path, version, date):
     # Establish database connection (port 9200 by default)
     connections.create_connection(host=app.config['ELASTIC_IP'])
 
-    print(f'Writing updates for version {version} (released {date}).')
+    logging.info(f'Writing updates for version {version} (released {date}).')
 
     # Establish index to write to
     index = Index(f'content_{version}')
@@ -169,16 +169,16 @@ def run_parser(path, version, date):
             for hit in meta_search:
                 complete = hit.status >= DocStatus.WRITTEN.value
             if complete:
-                print("This version has already been written to the database. "
-                      "Not rewriting the base index.")
+                logging.info("This version has already been written to the database. "
+                             "Not rewriting the base index.")
                 return # Everything's fine, no need to retry
             # Last write was incomplete; delete the index and start over
-            print('Clearing index.')
+            logging.info('Clearing index.')
             index.delete()
     except Exception as e:
-        print(f"Issue with the existing index. Try checking your connection or "
-              f"manually deleting the index and retry.")
-        print(e)
+        logging.error("Issue with the existing index. Try checking your connection or "
+                      "manually deleting the index and retry.")
+        logging.error(e)
         raise RetryException # Retry immediately
 
     # Create new index
@@ -202,9 +202,9 @@ def run_parser(path, version, date):
 
     # Make sure both threads are okay before committing
     if len(thread_status) < 2:
-        print(f"Incomplete run. Please retry. Only wrote {thread_status} to the database.")
+        logging.error(f"Incomplete run. Please retry. Only wrote {thread_status} to the database.")
     else:
-        print(f"Finished writing to database.")
+        logging.info(f"Finished writing to database.")
 
 
 def try_parse(path, version, date):
@@ -227,20 +227,22 @@ def try_parse(path, version, date):
     while retry:
         retry = False
         if tries_left < 1:
-            print("Ran out of retries. Stopping without marking as written.")
+            logging.error("Ran out of retries. Stopping without marking as written.")
             return
         try:
             run_parser(path=path, version=version, date=date)
         except RetryException:
-            print(f"Script failed, retrying. (Will try again {tries_left} times before giving up.)")
+            logging.error(f"Script failed, retrying. "
+                          f"(Will try again {tries_left} times before giving up.)")
             retry = True
         except MaintenanceException:
-            print(f"Script may need maintenance. Find the programmer. "
-                  f"Stopping without marking as written.")
+            logging.error("Script may need maintenance. Find the programmer. "
+                          "Stopping without marking as written.")
             return
         except Exception as e:
-            print("Uncaught exception from run_parser. Stopping without marking as written.")
-            print(e)
+            logging.error("Uncaught exception from run_parser. "
+                          "Stopping without marking as written.")
+            logging.error(e)
             return
         tries_left -= 1
 
@@ -281,10 +283,10 @@ if __name__ == '__main__':
     # Wait for at least those details to be in the database.
     while scraper.num_new_releases > len(versions):
         versions = get_unanalyzed_version_details()
-    print(f"Parsing the following versions:")
-    print(versions)
+    logging.info(f"Parsing the following versions:")
+    logging.info(versions)
     for ver in versions:
-        print(f"VERSION {ver['version']} FROM {ver['date']}")
+        logging.info(f"VERSION {ver['version']} FROM {ver['date']}")
         try_parse(path=f"{app.config['DOWNLOAD_DIR']}/Updates_{ver['version']}.html",
                   version=ver['version'], date=ver['date'])
 

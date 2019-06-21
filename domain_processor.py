@@ -25,12 +25,13 @@ This software is provided without support, warranty, or guarantee.
 Use at your own risk.
 '''
 
+import logging
 from multiprocessing import Pool
 
 from elasticsearch_dsl import connections, Search, UpdateByQuery
 
-import sys # TODO: only for local imports
-sys.path.append('../safe-networking') # TODO: this is Bad and I'm Sorry.
+import sys
+sys.path.append('../safe-networking')
 from project.dns.dnsutils import updateAfStats, getDomainDoc
 
 
@@ -43,16 +44,16 @@ def process_hit(hit):
     hit -- a domain to process
     version -- the full version number
     '''
-    print(f"Looking up tags for {hit.domain} . . .")
+    logging.info(f"Looking up tags for {hit.domain} . . .")
 
     try:
         # Make an autofocus request.
         document = getDomainDoc(hit.domain)
     except Exception as e:
-        print(f"Issue with getting the domain document: {e}")
+        logging.warning(f"Issue with getting the domain document: {e}")
         return
 
-    print(f'Finished {hit.domain}.')
+    logging.info(f'Finished {hit.domain}.')
 
     try:
         tag = document.tags[0][2][0]
@@ -88,6 +89,7 @@ def process_domains():
     updateAfStats()
     af_stats_search = Search(index='af-details')
     af_stats_search.execute()
+
     for hit in af_stats_search:
         day_af_reqs_left = int(hit.daily_points_remaining / 12)
 
@@ -95,16 +97,16 @@ def process_domains():
         iterator = pool.imap(process_hit, new_nongeneric_search.scan())
         # Write IPs of all matching documents back to test index.
         while True:
-            print(f"~{day_af_reqs_left} AutoFocus requests left today.")
+            logging.debug(f"~{day_af_reqs_left} AutoFocus requests left today.")
             if day_af_reqs_left < 1:
                 # Not enough points to do more today.
                 return
             try:
                 next(iterator)
             except StopIteration:
-                print("No more domains to process.")
+                logging.info("No more domains to process.")
                 return
             except Exception as e:
-                print(f"Issue getting next domain: {e}")
+                logging.warning(f"Issue getting next domain: {e}")
             # Decrement AF stats.
             day_af_reqs_left -= 1

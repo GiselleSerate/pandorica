@@ -26,6 +26,7 @@ Use at your own risk.
 '''
 
 from enum import IntEnum, unique
+import logging
 import os
 import re
 from time import sleep
@@ -120,7 +121,7 @@ class FirewallScraper:
         chrome_options = Options()
         chrome_options.binary_location = binary_location
         self._driver = webdriver.Chrome(executable_path=os.path.abspath(chrome_driver),
-                                       options=chrome_options)
+                                        options=chrome_options)
 
         # Init details
         self._download_dir = download_dir
@@ -182,7 +183,8 @@ class FirewallScraper:
             device_tab_present = EC.presence_of_element_located((By.ID, 'device'))
             WebDriverWait(self._driver, timeout).until(device_tab_present)
         except TimeoutException:
-            print("Timed out waiting for post-login page to load.")
+            logging.error("Timed out waiting for post-login page to load.")
+            raise TimeoutException
 
         # Go to device tab.
         device_tab = self._driver.find_element_by_id('device')
@@ -213,7 +215,8 @@ class FirewallScraper:
             av_table_present = EC.presence_of_element_located((By.ID, 'ext-gen468-gp-type-anti-virus-bd'))
             WebDriverWait(self._driver, timeout).until(av_table_present)
         except TimeoutException:
-            print('Timed out waiting for updates to load.')
+            logging.error('Timed out waiting for updates to load.')
+            raise TimeoutException
 
         av_table = self._driver.find_element_by_id('ext-gen468-gp-type-anti-virus-bd')
         av_children = av_table.find_elements_by_xpath('*')
@@ -289,6 +292,7 @@ class FirewallScraper:
 
     def latest_download(self):
         '''Download the single latest release from the firewall.'''
+        logging.info("Downloading the single latest release from the firewall.")
         self._login()
         self._find_update_page()
         self._download_latest_release()
@@ -296,6 +300,7 @@ class FirewallScraper:
 
     def full_download(self):
         '''Download any new releases from the firewall.'''
+        logging.info("Downloading all undownloaded releases from the firewall.")
         self._login()
         self._find_update_page()
         self._download_all_new_releases()
