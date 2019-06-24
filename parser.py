@@ -286,7 +286,6 @@ if __name__ == '__main__':
     logging.info(f"Parsing the following versions:")
     logging.info(versions)
     for ver in versions:
-        logging.info(f"VERSION {ver['version']} FROM {ver['date']}")
         try_parse(path=f"{app.config['DOWNLOAD_DIR']}/Updates_{ver['version']}.html",
                   version=ver['version'], date=ver['date'])
 
