@@ -29,6 +29,7 @@ import re
 import logging
 from logging.config import dictConfig
 from threading import Thread
+import os
 
 from bs4 import BeautifulSoup
 from elasticsearch_dsl import connections, Index, Search, UpdateByQuery
@@ -38,6 +39,16 @@ from domain_docs import RetryException, MaintenanceException, DomainDocument
 from domain_processor import process_domains
 from scraper import DocStatus, FirewallScraper
 
+
+
+from logging.config import dictConfig
+from dotenv import load_dotenv
+import os
+
+
+home = os.getenv('HOME')
+env_path = os.path.join(home, '.panrc')
+load_dotenv(dotenv_path=env_path, verbose=True)
 
 
 dictConfig({
@@ -51,14 +62,12 @@ dictConfig({
         'formatter': 'default'
     }},
     'root': {
-        'level': 'INFO',
+        'level': os.getenv('LOGGING_LEVEL'),
         'handlers': ['wsgi']
     }
 })
 
-# Configuration
-app = Flask(__name__)
-app.config.from_object('config.DebugConfig')
+
 
 
 
@@ -151,7 +160,7 @@ def run_parser(path, version, date):
 
 
     # Establish database connection (port 9200 by default)
-    connections.create_connection(host=app.config['ELASTIC_IP'])
+    connections.create_connection(host=os.getenv('ELASTIC_IP'))
 
     logging.info(f'Writing updates for version {version} (released {date}).')
 
@@ -190,11 +199,11 @@ def run_parser(path, version, date):
 
     # Start threads for adds and removes
     added_thread = Thread(target=parse_and_write,
-                          args=(soup, 'added', re.compile(app.config['ADD_REGEX']),
+                          args=(soup, 'added', re.compile(os.getenv('ADD_REGEX')),
                                 added, version, thread_status))
     added_thread.start()
     removed_thread = Thread(target=parse_and_write,
-                            args=(soup, 'removed', re.compile(app.config['REM_REGEX']),
+                            args=(soup, 'removed', re.compile(os.getenv('REM_REGEX')),
                                   removed, version, thread_status))
     removed_thread.start()
     added_thread.join()
@@ -218,7 +227,7 @@ def try_parse(path, version, date):
 
     '''
     try:
-        tries_left = int(app.config['NUM_TRIES'])
+        tries_left = int(os.getenv('NUM_TRIES'))
     except ValueError:
         # Can't convert to an int; use a default.
         tries_left = 5
@@ -269,12 +278,12 @@ def get_unanalyzed_version_details():
 
 if __name__ == '__main__':
     # Download latest release notes.
-    scraper = FirewallScraper(ip=app.config['FW_IP'], username=app.config['FW_USERNAME'],
-                              password=app.config['FW_PASSWORD'],
-                              chrome_driver=app.config['DRIVER'],
-                              binary_location=app.config['BINARY_LOCATION'],
-                              download_dir=app.config['DOWNLOAD_DIR'],
-                              elastic_ip=app.config['ELASTIC_IP'])
+    scraper = FirewallScraper(ip=os.getenv('FW_IP'), username=os.getenv('FW_USERNAME'),
+                              password=os.getenv('FW_PASSWORD'),
+                              chrome_driver=os.getenv('DRIVER'),
+                              binary_location=os.getenv('BINARY_LOCATION'),
+                              elastic_ip=os.getenv('ELASTIC_IP'),
+                              download_dir=os.getenv('DOWNLOAD_DIR'))
     scraper.full_download()
 
     # Parse domains and write them to the database.
@@ -287,7 +296,7 @@ if __name__ == '__main__':
     logging.info(versions)
     for ver in versions:
         logging.info(f"VERSION {ver['version']} FROM {ver['date']}")
-        try_parse(path=f"{app.config['DOWNLOAD_DIR']}/Updates_{ver['version']}.html",
+        try_parse(path=f"{os.getenv('DOWNLOAD_DIR')}/Updates_{ver['version']}.html",
                   version=ver['version'], date=ver['date'])
 
     # Finally, ask AutoFocus about all unprocessed non-generic domains.

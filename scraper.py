@@ -44,8 +44,6 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 
 
-app = Flask(__name__)
-app.config.from_object('config.DebugConfig')
 
 
 
@@ -308,10 +306,10 @@ class FirewallScraper:
 
 
 if __name__ == '__main__':
-    scraper = FirewallScraper(ip=app.config['FW_IP'], username=app.config['FW_USERNAME'],
-                              password=app.config['FW_PASSWORD'],
-                              chrome_driver=app.config['DRIVER'],
-                              binary_location=app.config['BINARY_LOCATION'],
-                              download_dir=app.config['DOWNLOAD_DIR'],
-                              elastic_ip=app.config['ELASTIC_IP'])
+    scraper = FirewallScraper(ip=os.getenv('FW_IP'), username=os.getenv('FW_USERNAME'),
+                              password=os.getenv('FW_PASSWORD'),
+                              chrome_driver=os.getenv('DRIVER'),
+                              binary_location=os.getenv('BINARY_LOCATION'),
+                              download_dir=os.getenv('DOWNLOAD_DIR'),
+                              elastic_ip=os.getenv('ELASTIC_IP'))
     scraper.full_download()
