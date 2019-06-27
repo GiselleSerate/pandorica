@@ -34,7 +34,7 @@ from time import sleep
 from elasticsearch_dsl import connections, Date, DocType, Integer, Keyword, Search, Text
 from selenium import webdriver
 from selenium.common.exceptions import (ElementClickInterceptedException, NoAlertPresentException,
-                                        TimeoutException, UnexpectedAlertPresentException)
+                                        TimeoutException, UnexpectedAlertPresentException, WebDriverException)
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -117,6 +117,8 @@ class FirewallScraper:
         # Set up driver
         chrome_options = Options()
         chrome_options.binary_location = binary_location
+        chrome_options.add_argument('--no-sandbox')
+        chrome_options.add_argument('--disable-dev-shm-usage')
         self._driver = webdriver.Chrome(executable_path=os.path.abspath(chrome_driver),
                                         options=chrome_options)
 
@@ -201,6 +203,8 @@ class FirewallScraper:
                 check_now.click()
                 break
             except ElementClickInterceptedException:
+                sleep(1)
+            except WebDriverException: # Alternate exception for Chromium in Docker
                 sleep(1)
 
         # Wait for updates to load in.
