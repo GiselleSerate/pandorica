@@ -32,7 +32,6 @@ import re
 from time import sleep
 
 from elasticsearch_dsl import connections, Date, DocType, Integer, Keyword, Search, Text
-from flask import Flask
 from selenium import webdriver
 from selenium.common.exceptions import (ElementClickInterceptedException, NoAlertPresentException,
                                         TimeoutException, UnexpectedAlertPresentException)

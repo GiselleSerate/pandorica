@@ -30,9 +30,7 @@ from multiprocessing import Pool
 
 from elasticsearch_dsl import connections, Search, UpdateByQuery
 
-import sys
-sys.path.append('../safe-networking')
-from project.dns.dnsutils import updateAfStats, getDomainDoc
+from lib.dnsutils import updateAfStats, getDomainDoc
 
 
 

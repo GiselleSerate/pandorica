@@ -33,7 +33,6 @@ import os
 
 from bs4 import BeautifulSoup
 from elasticsearch_dsl import connections, Index, Search, UpdateByQuery
-from flask import Flask
 
 from domain_docs import RetryException, MaintenanceException, DomainDocument
 from domain_processor import process_domains
@@ -47,8 +46,11 @@ import os
 
 
 home = os.getenv('HOME')
-env_path = os.path.join(home, '.panrc')
+dot = os.getenv('PWD')
+env_path = os.path.join(dot, 'src', 'lib', '.defaultsrc')
 load_dotenv(dotenv_path=env_path, verbose=True)
+env_path = os.path.join(home, '.panrc')
+load_dotenv(dotenv_path=env_path, verbose=True, override=True)
 
 
 dictConfig({
@@ -67,6 +69,8 @@ dictConfig({
     }
 })
 
+logging.info(env_path)
+logging.info(os.getenv('AUTOFOCUS_API_KEY'))
 
 
 
