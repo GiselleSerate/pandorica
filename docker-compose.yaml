@@ -1,0 +1,25 @@
+---
+version: '3'
+services:
+
+  elk:
+    image: sebp/elk
+    container_name: elk_con
+    restart: always
+    volumes:
+      - ~/data/backups:/var/backups
+      - ~/data/elasticsearch/:/var/lib/elasticsearch
+    ports: ['9200:9200', '5601:5601']
+    networks: ['pandorica-net']
+
+  pandorica:
+    image: pandorica
+    container_name: pandorica_con
+    volumes:
+      - ~/.dockerrc:/root/.panrc
+      - ~/_dev/versiondocs:/app/versiondocs
+    ports: ['5902:5900']
+    networks: ['pandorica-net']
+    depends_on: ['elk']
+
+networks: {pandorica-net: {}}
