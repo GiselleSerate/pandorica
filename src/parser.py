@@ -71,7 +71,7 @@ dictConfig({
 
 
 
-def parse_and_write(soup, string_name, pattern, array, version, thread_status):
+def parse_and_write(soup, string_name, pattern, array, date, version, thread_status):
     '''
     Pulls all domains of one type from the soup and then writes them to the database.
 
@@ -115,10 +115,12 @@ def parse_and_write(soup, string_name, pattern, array, version, thread_status):
         # Create new DomainDocument in db
         domain_doc = DomainDocument(meta={'id':domain})
         domain_doc.meta.index = f'content_{version}'
+        domain_doc.date = date
+        domain_doc.version = version
         domain_doc.raw = raw
         domain_doc.header = split_raw[0]
         domain_doc.threatType = split_header[0]
-        domain_doc.threatClass = split_header[1] if len(split_header) > 1 else None
+        domain_doc.threatName = split_header[1] if len(split_header) > 1 else None
         domain_doc.domain = split_raw[1]
         domain_doc.action = string_name
         domain_doc.processed = 0
@@ -200,11 +202,11 @@ def run_parser(path, version, date):
     # Start threads for adds and removes
     added_thread = Thread(target=parse_and_write,
                           args=(soup, 'added', re.compile(os.getenv('ADD_REGEX')),
-                                added, version, thread_status))
+                                added, date, version, thread_status))
     added_thread.start()
     removed_thread = Thread(target=parse_and_write,
                             args=(soup, 'removed', re.compile(os.getenv('REM_REGEX')),
-                                  removed, version, thread_status))
+                                  removed, date, version, thread_status))
     removed_thread.start()
     added_thread.join()
     removed_thread.join()
@@ -294,13 +296,8 @@ if __name__ == '__main__':
         versions = get_unanalyzed_version_details()
     logging.info(f"Parsing the following versions:")
     logging.info(versions)
-    for ver in versions:
-<<<<<<< HEAD:parser.py
-        try_parse(path=f"{app.config['DOWNLOAD_DIR']}/Updates_{ver['version']}.html",
-=======
-        logging.info(f"VERSION {ver['version']} FROM {ver['date']}")
+    for ver in versions[:1]: # TODO: Just do the first one yo
         try_parse(path=f"{os.getenv('DOWNLOAD_DIR')}/Updates_{ver['version']}.html",
->>>>>>> develop:src/parser.py
                   version=ver['version'], date=ver['date'])
 
     # Finally, ask AutoFocus about all unprocessed non-generic domains.

@@ -132,6 +132,7 @@ class FirewallScraper:
 
     def _login(self):
         '''Log into firewall.'''
+        logging.error(f'https://{self._ip}')
         # Load firewall login interface.
         self._driver.get(f'https://{self._ip}')
 

@@ -25,7 +25,7 @@ This software is provided without support, warranty, or guarantee.
 Use at your own risk.
 '''
 
-from elasticsearch_dsl import DocType, Integer, Keyword, Text
+from elasticsearch_dsl import Date, DocType, Integer, Keyword, Text
 
 
 
@@ -44,10 +44,12 @@ class DomainDocument(DocType):
     # Use the domain as the id.
     id = Text(analyzer='snowball', fields={'raw': Keyword()})
     domain = Keyword()
+    date = Date()
+    version = Keyword()
     raw = Keyword()
     header = Keyword()
     threatType = Keyword()
-    threatClass = Keyword()
+    threatName = Keyword()
     action = Text()
     tags = Text(multi=True)
     processed = Integer()
@@ -65,10 +67,12 @@ class DomainDocument(DocType):
         return cls(
             id=obj.id,
             domain=obj.domain,
+            date=obj.date,
+            version=obj.version,
             raw=obj.raw,
             header=obj.header,
             threatType=obj.threatType,
-            threatClass=obj.threatClass,
+            threatName=obj.threatName,
             action=obj.action,
             tags=obj.tags,
             processed=obj.processed,
