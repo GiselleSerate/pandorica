@@ -279,6 +279,8 @@ def get_unanalyzed_version_details():
 
 
 if __name__ == '__main__':
+    connections.create_connection(host='localhost')
+
     # Download latest release notes.
     scraper = FirewallScraper(ip=os.getenv('FW_IP'), username=os.getenv('FW_USERNAME'),
                               password=os.getenv('FW_PASSWORD'),
@@ -296,7 +298,7 @@ if __name__ == '__main__':
         versions = get_unanalyzed_version_details()
     logging.info(f"Parsing the following versions:")
     logging.info(versions)
-    for ver in versions[:1]: # TODO: Just do the first one yo
+    for ver in versions:
         try_parse(path=f"{os.getenv('DOWNLOAD_DIR')}/Updates_{ver['version']}.html",
                   version=ver['version'], date=ver['date'])
 

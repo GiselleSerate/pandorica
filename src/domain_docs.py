@@ -48,8 +48,8 @@ class DomainDocument(DocType):
     version = Keyword()
     raw = Keyword()
     header = Keyword()
-    threatType = Keyword()
-    threatName = Keyword()
+    threat_type = Keyword()
+    threat_name = Keyword()
     action = Text()
     tags = Text(multi=True)
     processed = Integer()
@@ -71,8 +71,8 @@ class DomainDocument(DocType):
             version=obj.version,
             raw=obj.raw,
             header=obj.header,
-            threatType=obj.threatType,
-            threatName=obj.threatName,
+            threat_type=obj.threat_type,
+            threat_name=obj.threat_name,
             action=obj.action,
             tags=obj.tags,
             processed=obj.processed,

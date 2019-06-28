@@ -54,12 +54,27 @@ def process_hit(hit):
     logging.info(f'Finished {hit.domain}.')
 
     try:
-        tag = document.tags[0][2][0]
+        write_dict = {}
+        write_dict['tag'] = document.tags[0][2][0]
+        write_dict['tag_name'] = write_dict['tag'][0]
+        write_dict['public_tag_name'] = write_dict['tag'][1]
+        write_dict['tag_class'] = write_dict['tag'][2]
+        write_dict['tag_group'] = write_dict['tag'][3]
+        write_dict['description'] = write_dict['tag'][4]
+        write_dict['source'] = write_dict['public_tag_name'].split('.')[0]
+
         # Write first tag to db.
         ubq = (UpdateByQuery(index=f"content_*")
                .query('match', domain=hit.domain)
-               .script(source='ctx._source.tag=params.tag; ctx._source.processed=1',
-                       lang='painless', params={'tag': tag}))
+               .script(source='ctx._source.tag=params.tag;'
+                              'ctx._source.tag_name=params.tag_name;'
+                              'ctx._source.public_tag_name=params.public_tag_name;'
+                              'ctx._source.tag_class=params.tag_class;'
+                              'ctx._source.tag_group=params.tag_group;'
+                              'ctx._source.description=params.description;'
+                              'ctx._source.source=params.source;'
+                              'ctx._source.processed=1',
+                       lang='painless', params=write_dict))
         ubq.execute()
     except (AttributeError, IndexError):
         # No tag available. Regardless, note that we have processed this entry.
@@ -72,8 +87,7 @@ def process_hit(hit):
 def process_domains():
     '''Use AutoFocus to process all unprocessed non-generic domains in any index.'''
 
-    # TODO: I stuck this in here but it's really only necessary if
-    # you run this interactively without running the parser first.
+    # Necessary if you don't run the parser first.
     # Establish database connection (port 9200 by default).
     connections.create_connection(host='localhost')
 
