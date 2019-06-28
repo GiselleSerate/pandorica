@@ -32,20 +32,14 @@ import re
 from time import sleep
 
 from elasticsearch_dsl import connections, Date, DocType, Integer, Keyword, Search, Text
-from flask import Flask
 from selenium import webdriver
 from selenium.common.exceptions import (ElementClickInterceptedException, NoAlertPresentException,
-                                        TimeoutException, UnexpectedAlertPresentException)
+                                        TimeoutException, UnexpectedAlertPresentException, WebDriverException)
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
-
-
-
-app = Flask(__name__)
-app.config.from_object('config.Config')
 
 
 
@@ -120,6 +114,8 @@ class FirewallScraper:
         # Set up driver
         chrome_options = Options()
         chrome_options.binary_location = binary_location
+        chrome_options.add_argument('--no-sandbox')
+        chrome_options.add_argument('--disable-dev-shm-usage')
         self._driver = webdriver.Chrome(executable_path=os.path.abspath(chrome_driver),
                                         options=chrome_options)
 
@@ -204,6 +200,8 @@ class FirewallScraper:
                 check_now.click()
                 break
             except ElementClickInterceptedException:
+                sleep(1)
+            except WebDriverException: # Alternate exception for Chromium in Docker
                 sleep(1)
 
         # Wait for updates to load in.
@@ -308,10 +306,10 @@ class FirewallScraper:
 
 
 if __name__ == '__main__':
-    scraper = FirewallScraper(ip=app.config['FW_IP'], username=app.config['FW_USERNAME'],
-                              password=app.config['FW_PASSWORD'],
-                              chrome_driver=app.config['DRIVER'],
-                              binary_location=app.config['BINARY_LOCATION'],
-                              download_dir=app.config['DOWNLOAD_DIR'],
-                              elastic_ip=app.config['ELASTIC_IP'])
+    scraper = FirewallScraper(ip=os.getenv('FW_IP'), username=os.getenv('FW_USERNAME'),
+                              password=os.getenv('FW_PASSWORD'),
+                              chrome_driver=os.getenv('DRIVER'),
+                              binary_location=os.getenv('BINARY_LOCATION'),
+                              download_dir=os.getenv('DOWNLOAD_DIR'),
+                              elastic_ip=os.getenv('ELASTIC_IP'))
     scraper.full_download()
