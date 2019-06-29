@@ -119,8 +119,8 @@ def parse_and_write(soup, string_name, pattern, array, date, version, thread_sta
         domain_doc.version = version
         domain_doc.raw = raw
         domain_doc.header = split_raw[0]
-        domain_doc.threatType = split_header[0]
-        domain_doc.threatName = split_header[1] if len(split_header) > 1 else None
+        domain_doc.threat_type = split_header[0]
+        domain_doc.threat_name = split_header[1] if len(split_header) > 1 else None
         domain_doc.domain = split_raw[1]
         domain_doc.action = string_name
         domain_doc.processed = 0
