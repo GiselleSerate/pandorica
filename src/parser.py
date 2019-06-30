@@ -47,7 +47,7 @@ import os
 
 home = os.getenv('HOME')
 dot = os.getenv('PWD')
-env_path = os.path.join(dot, 'src', 'lib', '.defaultsrc')
+env_path = os.path.join(dot, 'src', 'lib', '.defaultrc')
 load_dotenv(dotenv_path=env_path, verbose=True)
 env_path = os.path.join(home, '.panrc')
 load_dotenv(dotenv_path=env_path, verbose=True, override=True)
