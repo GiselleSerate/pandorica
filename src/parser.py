@@ -291,10 +291,10 @@ if __name__ == '__main__':
     scraper.full_download()
 
     # Parse domains and write them to the database.
-    versions = []
+    versions = get_unanalyzed_version_details()
     # Sometimes the db write for freshly downloaded versions doesn't go through immediately.
     # Wait for at least those details to be in the database.
-    while scraper.num_new_releases > len(versions):
+    while len(versions) < scraper.num_new_releases:
         versions = get_unanalyzed_version_details()
     logging.info(f"Parsing the following versions:")
     logging.info(versions)
