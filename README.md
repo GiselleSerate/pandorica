@@ -4,7 +4,7 @@
 - [ ] Secure a PANW firewall to scrape release notes from.
 - [ ] Set up and start an elasticsearch instance using a Docker container (more detailed instructions TBD).
 - [ ] Download Chrome and an appropriate driver. 
-- [ ] Configure the `~/.panrc` with values (TBD).
+- [ ] Configure the `~/.panrc` to override `pandorica/src/lib/.defaultrc` where necessary.
 - [ ] Configure the Elasticsearch index mappings using the [install script in Safe Networking](https://github.com/PaloAltoNetworks/safe-networking/blob/master/install/setup.sh).
 
 ## Usage
