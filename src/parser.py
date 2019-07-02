@@ -178,7 +178,7 @@ def run_parser(path, version, date):
             meta_search.execute()
             complete = 0 # By default, assume incomplete
             for hit in meta_search:
-                complete = hit.status >= DocStatus.WRITTEN.value
+                complete = hit.status >= DocStatus.PARSED.value
             if complete:
                 logging.info("This version has already been written to the database. "
                              "Not rewriting the base index.")
@@ -261,7 +261,7 @@ def try_parse(path, version, date):
     ubq = (UpdateByQuery(index='update-details')
            .query('match', version=version)
            .script(source='ctx._source.status=params.status',
-                   lang='painless', params={'status':DocStatus.WRITTEN.value}))
+                   lang='painless', params={'status':DocStatus.PARSED.value}))
     ubq.execute()
 
 

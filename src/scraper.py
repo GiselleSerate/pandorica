@@ -47,7 +47,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 class DocStatus(IntEnum):
     '''Defines document statuses.'''
     DOWNLOADED = 1
-    WRITTEN = 2
+    PARSED = 2
     AUTOFOCUSED = 3
 
 
