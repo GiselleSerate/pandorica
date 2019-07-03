@@ -34,53 +34,51 @@ from elasticsearch_dsl import connections, Search
 
 import parser
 from scraper import DocStatus, VersionDocument
+from testcases import ParseTest
 
-
-# Define test settings.
-dot = os.getenv('PWD')
-env_path = os.path.join(dot, 'src', 'test', '.testrc')
-load_dotenv(dotenv_path=env_path, verbose=True, override=True)
 
 if __name__ == '__main__':
+    # Initialize test settings.
+    parse_test = ParseTest()
+
     # Connect to a different port so you don't accidentally nuke your data.
     connections.create_connection(host=f"localhost")
 
     # Set up update details so try_parse can verify it.
-    version_doc = VersionDocument(meta={'id':os.getenv('VERSION')})
-    version_doc.shortversion = os.getenv('VERSION').split('-')[0]
-    version_doc.version = os.getenv('VERSION')
-    version_doc.date = os.getenv('VERSION_DATE')
+    version_doc = VersionDocument(meta={'id':parse_test.version})
+    version_doc.shortversion = parse_test.version.split('-')[0]
+    version_doc.version = parse_test.version
+    version_doc.date = parse_test.version_date
     version_doc.status = DocStatus.DOWNLOADED.value
     version_doc.save()
 
-    # Establish cases to check are in the database later on.
-    cases = [{'raw': 'generic:hailmaryfulloffacts.com', 'action': 'added'},
-             {'raw': 'TrojanDownloader.upatre:advancehomesbd.com', 'action': 'added'},
-             {'raw': 'generic:aceheartinstitute.com', 'action': 'removed'},
-             {'raw': 'Backdoor.bladabindi:linakamisa.duckdns.org', 'action': 'removed'}]
-
     # Fill in cases from raw domain.
-    for case in cases:
+    for case in parse_test.cases:
         split_raw = case['raw'].split(':')
         domain = split_raw[1]
         split_header = split_raw[0].split('.')
         case['domain'] = domain
-        case['date'] = os.getenv('VERSION_DATE')
-        case['version'] = os.getenv('VERSION')
+        case['date'] = parse_test.version_date
+        case['version'] = parse_test.version
         case['header'] = split_raw[0]
         case['threat_type'] = split_header[0]
         case['threat_name'] = split_header[1] if len(split_header) > 1 else None
         case['domain'] = split_raw[1]
         case['processed'] = 0
 
+
+    # Find the preloaded version notes.
+    home = os.getenv('HOME')
+    static_dir = os.path.join(home, parse_test.static_dir)
+
     # Actually run parse.
-    logging.info(f"Parsing version {os.getenv('VERSION')} from {os.getenv('VERSION_DATE')}")
-    parser.try_parse(path=f"{os.getenv('STATIC_DIR')}/Updates_{os.getenv('VERSION')}.html",
-                     version=os.getenv('VERSION'), date=os.getenv('VERSION_DATE'))
+    logging.info(f"Parsing version {parse_test.version} from {parse_test.version_date}")
+    parser.try_parse(path=f"{static_dir}/Updates_{parse_test.version}.html",
+                     version=parse_test.version, date=parse_test.version_date)
 
     # Now check to see if some representative domains are in the database, with fields as expected.
-    for case in cases:
-        domSearch = (Search(index=f"content_{os.getenv('VERSION')}")
+    for case in parse_test.cases:
+        domSearch = (Search(index=f"content_{parse_test.version}")
                      .query('match', domain=case['domain']))
         domSearch.execute()
 
@@ -92,7 +90,7 @@ if __name__ == '__main__':
                 assert hit[key] == value, f"Mismatch on {key}, {value}: is {hit[key]} instead."
 
     # Verify that the version in update-details has had its status updated, since we just parsed.
-    updateSearch = Search(index='update-details').query('match', id=os.getenv('VERSION'))
+    updateSearch = Search(index='update-details').query('match', id=parse_test.version)
     updateSearch.execute()
     for hit in updateSearch:
         assert hit['status'] == DocStatus.PARSED.value
