@@ -33,8 +33,31 @@ from dotenv import load_dotenv
 from elasticsearch_dsl import connections, Search
 
 import parser
+from domain_processor import process_domains
 from scraper import DocStatus, VersionDocument
 from testcases import ParseTest
+
+
+def test_autofocus(parse_test):
+    # Assume that we have already parsed and have a good database. 
+    fields = ['tag_group', 'public_tag_name', 'tag_class', 'description', 'tag']
+    # Try processing 10 times. That's probably enough.
+    for _ in range(10):
+        process_domains()
+
+    processedSearch = Search(index=f"content_{parse_test.version}").query('match', processed=1)
+    processedSearch.execute()
+    num_processed = 0
+    for hit in processedSearch.scan():
+        # Check that each of these specific cases have some information in the database.
+        for field in fields:
+            assert hit[field] != None, f"Domain {hit['domain']} missing field {field}."
+        num_processed += 1
+    # Check to see what percentage of the domains have processed.
+    percent_processed = float(num_processed) / parse_test.num_domains
+    logging.info(f"Processed {percent_processed*100}% of domains.")
+    assert percent_processed >= parse_test.percent_processed, (f"Processed only {percent_processed*100}% "
+                                                               "of domains, not {parse_test.percent_processed*100}%.")
 
 
 if __name__ == '__main__':
@@ -94,3 +117,6 @@ if __name__ == '__main__':
     updateSearch.execute()
     for hit in updateSearch:
         assert hit['status'] == DocStatus.PARSED.value
+
+    # Test autofocus query code
+    test_autofocus(parse_test)
