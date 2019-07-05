@@ -45,13 +45,18 @@ def test_autofocus(parse_test):
     for _ in range(10):
         process_domains()
 
-    processedSearch = Search(index=f"content_{parse_test.version}").query('match', processed=1)
+    processedSearch = Search(index=f"content_{parse_test.version}").query('match', processed=2)
     processedSearch.execute()
     num_processed = 0
     for hit in processedSearch.scan():
         # Check that each of these specific cases have some information in the database.
         for field in fields:
             assert hit[field] != None, f"Domain {hit['domain']} missing field {field}."
+        num_processed += 1
+    processedSearch = Search(index=f"content_{parse_test.version}").query('match', processed=1)
+    processedSearch.execute()
+    for hit in processedSearch.scan():
+        # Just count these.
         num_processed += 1
     # Check to see what percentage of the domains have processed.
     percent_processed = float(num_processed) / parse_test.num_domains

@@ -125,12 +125,13 @@ def parse_and_write(soup, string_name, pattern, array, date, version, thread_sta
         domain_doc.action = string_name
         domain_doc.processed = 0
 
-        try:
-            domain_doc.save()
-        except Exception as e:
-            logging.error("Saving domain failed; check connection to database and retry.")
-            logging.error(e)
-            raise RetryException # Retry immediately
+        while True:
+            try:
+                domain_doc.save()
+                break
+            except ConnectionError:
+                # Retry.
+                pass
 
     logging.info(f'Finished writing {string_name} domains.')
     thread_status.append(string_name)
@@ -170,27 +171,28 @@ def run_parser(path, version, date):
     index = Index(f'content_{version}')
 
     # Stop if we've written this fully before; delete if it was a partial write
-    try:
-        if index.exists():
-            # Search for metadoc to see if it was fully written
-            meta_search = (Search(index='update-details')
-                           .query('match', version=version))
-            meta_search.execute()
-            complete = 0 # By default, assume incomplete
-            for hit in meta_search:
-                complete = hit.status >= DocStatus.PARSED.value
-            if complete:
-                logging.info("This version has already been written to the database. "
-                             "Not rewriting the base index.")
-                return # Everything's fine, no need to retry
-            # Last write was incomplete; delete the index and start over
-            logging.info('Clearing index.')
-            index.delete()
-    except Exception as e:
-        logging.error("Issue with the existing index. Try checking your connection or "
-                      "manually deleting the index and retry.")
-        logging.error(e)
-        raise RetryException # Retry immediately
+    while True:
+        try:
+            if index.exists():
+                # Search for metadoc to see if it was fully written
+                meta_search = (Search(index='update-details')
+                               .query('match', version=version))
+                meta_search.execute()
+                complete = 0 # By default, assume incomplete
+                for hit in meta_search:
+                    complete = hit.status >= DocStatus.PARSED.value
+                if complete:
+                    logging.info("This version has already been written to the database. "
+                                 "Not rewriting the base index.")
+                    return # Everything's fine, no need to retry
+                # Last write was incomplete; delete the index and start over
+                logging.info('Clearing index.')
+                index.delete()
+            break
+        except ConnectionError:
+            # Retry.
+            logging.warning("Connection error, retrying.")
+            pass
 
     # Create new index
     index.create()
@@ -250,11 +252,6 @@ def try_parse(path, version, date):
             logging.error("Script may need maintenance. Find the programmer. "
                           "Stopping without marking as written.")
             return
-        except Exception as e:
-            logging.error("Uncaught exception from run_parser. "
-                          "Stopping without marking as written.")
-            logging.error(e)
-            return
         tries_left -= 1
 
     # Tell update details that downloaded version has been consumed.
@@ -296,7 +293,7 @@ if __name__ == '__main__':
     # Wait for at least those details to be in the database.
     while len(versions) < scraper.num_new_releases:
         versions = get_unanalyzed_version_details()
-    logging.info(f"Parsing the following versions:")
+    logging.info(f"Parsing the following {len(versions)} versions:")
     logging.info(versions)
     for ver in versions:
         try_parse(path=f"{os.getenv('DOWNLOAD_DIR')}/Updates_{ver['version']}.html",

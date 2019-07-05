@@ -29,6 +29,7 @@ import logging
 from multiprocessing import Pool
 
 from elasticsearch_dsl import connections, Search, UpdateByQuery
+from elasticsearch.exceptions import ConflictError, ConnectionTimeout, RequestError, TransportError
 
 from lib.dnsutils import updateAfStats, getDomainDoc
 
@@ -44,16 +45,20 @@ def process_hit(hit):
     '''
     logging.info(f"Looking up tags for {hit.domain} . . .")
 
-    try:
-        # Make an autofocus request.
-        document = getDomainDoc(hit.domain)
-    except Exception as e:
-        logging.warning(f"Issue with getting the domain document: {e}")
-        return
+    while True:
+        try:
+            # Make an autofocus request.
+            document = getDomainDoc(hit.domain)
+            break
+        except (AttributeError, ConnectionTimeout):
+            # Got a timeout or None doc, try again and maybe get a real one next time
+            pass
+        except TransportError:
+            # Perhaps could be solved by retry. Probably getDomainDoc should handle, but whatever.
+            logging.error(f"Encountered transport error on {hit.domain}.")
 
-    logging.info(f'Finished {hit.domain}.')
-
     try:
+        # Break out tag
         write_dict = {}
         write_dict['tag'] = document.tags[0][2][0]
         write_dict['tag_name'] = write_dict['tag'][0]
@@ -62,26 +67,51 @@ def process_hit(hit):
         write_dict['tag_group'] = write_dict['tag'][3]
         write_dict['description'] = write_dict['tag'][4]
         write_dict['source'] = write_dict['public_tag_name'].split('.')[0]
-
-        # Write first tag to db.
-        ubq = (UpdateByQuery(index=f"content_*")
-               .query('match', domain=hit.domain)
-               .script(source='ctx._source.tag=params.tag;'
-                              'ctx._source.tag_name=params.tag_name;'
-                              'ctx._source.public_tag_name=params.public_tag_name;'
-                              'ctx._source.tag_class=params.tag_class;'
-                              'ctx._source.tag_group=params.tag_group;'
-                              'ctx._source.description=params.description;'
-                              'ctx._source.source=params.source;'
-                              'ctx._source.processed=1',
-                       lang='painless', params=write_dict))
-        ubq.execute()
     except (AttributeError, IndexError):
-        # No tag available. Regardless, note that we have processed this entry.
+        # No tag available. Note that we have processed this entry (but with no tags) and stop.
+        logging.info(f"No tag on {hit.domain}.")
         ubq = (UpdateByQuery(index=f"content_*")
                .query('match', domain=hit.domain)
                .script(source='ctx._source.processed=1', lang='painless'))
-        ubq.execute()
+        while True:
+            try:
+                ubq.execute()
+                return
+            except ConnectionTimeout:
+                # Retry.
+                pass
+            except ConflictError:
+                # Can't be solved by retry. Skip for now.
+                logging.error(f"Elasticsearch conflict (409) writing {hit.domain} to db. (No tag, which is not the problem.) Skipping.")
+                return
+
+    logging.info(f"Tag on {hit.domain}.")
+
+    # Write first tag to db.
+    ubq = (UpdateByQuery(index=f"content_*")
+           .query('match', domain=hit.domain)
+           .script(source='ctx._source.tag=params.tag;'
+                          'ctx._source.tag_name=params.tag_name;'
+                          'ctx._source.public_tag_name=params.public_tag_name;'
+                          'ctx._source.tag_class=params.tag_class;'
+                          'ctx._source.tag_group=params.tag_group;'
+                          'ctx._source.description=params.description;'
+                          'ctx._source.source=params.source;'
+                          'ctx._source.processed=2',
+                   lang='painless', params=write_dict))
+    while True:
+        try:
+            ubq.execute()
+            return
+        except ConnectionTimeout:
+            # Retry.
+            pass
+        except ConflictError:
+            # Can't be solved by retry. Skip for now.
+            logging.error(f"Elasticsearch conflict (409) writing {hit.domain} to db. {write_dict['tag']} Skipping.")
+            return
+        except RequestError:
+            logging.warning(f"Encountered request error on {hit.domain}. {write_dict['tag']} Retrying.")
 
 
 def process_domains():
@@ -118,7 +148,7 @@ def process_domains():
             except StopIteration:
                 logging.info("No more domains to process.")
                 return
-            except Exception as e:
-                logging.warning(f"Issue getting next domain: {e}")
+            except ConnectionTimeout:
+                logging.error("Encountered connection timeout. Skipping this result.")
             # Decrement AF stats.
             day_af_reqs_left -= 1

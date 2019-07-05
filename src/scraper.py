@@ -194,29 +194,31 @@ class FirewallScraper:
         check_now = self._driver.find_element_by_css_selector("table[itemid='Device/Dynamic Updates-Check Now']")
         self._driver.execute_script("arguments[0].scrollIntoView(true)", check_now)
 
-        # Click as soon as the element is in view.
+        # Refresh update table
         while True:
+            # Click as soon as the element is in view.
+            while True:
+                try:
+                    check_now.click()
+                    break
+                except ElementClickInterceptedException:
+                    sleep(1)
+                except WebDriverException: # Alternate exception for Chromium in Docker
+                    sleep(1)
+
+            # Wait for updates to load in (otherwise we will get the old updates).
+            sleep(5)
+
+            # Wait for page to load.
+            timeout = 30
             try:
-                check_now.click()
+                av_table_present = EC.presence_of_element_located((By.XPATH, "//div[contains (@id, '-gp-type-anti-virus-bd')]"))
+                WebDriverWait(self._driver, timeout).until(av_table_present)
                 break
-            except ElementClickInterceptedException:
-                sleep(1)
-            except WebDriverException: # Alternate exception for Chromium in Docker
-                sleep(1)
+            except TimeoutException:
+                logging.warning('Timed out waiting for updates to load. Refresh again.')
 
-        # Wait for updates to load in.
-        sleep(10)
-
-        # Wait for page to load.
-        timeout = 500
-        try:
-            av_table_present = EC.presence_of_element_located((By.ID, 'ext-gen468-gp-type-anti-virus-bd'))
-            WebDriverWait(self._driver, timeout).until(av_table_present)
-        except TimeoutException:
-            logging.error('Timed out waiting for updates to load.')
-            raise TimeoutException
-
-        av_table = self._driver.find_element_by_id('ext-gen468-gp-type-anti-virus-bd')
+        av_table = self._driver.find_element_by_xpath("//div[contains (@id, '-gp-type-anti-virus-bd')]") #'ext-gen468-gp-type-anti-virus-bd')
         av_children = av_table.find_elements_by_xpath('*')
         self._versions = []
         # Iterate all versions
@@ -234,6 +236,7 @@ class FirewallScraper:
                                         r'virus/AntiVirusExternal-[0-9]*\.html'
                                         r'\?__gda__=[0-9]*_[a-z0-9]*', source).group(0)
             self._versions.append(new_ver)
+        logging.debug(f"Discovered versions {self._versions}.")
 
 
     def _download_latest_release(self):
@@ -271,6 +274,7 @@ class FirewallScraper:
         '''
         Download the specified release from the firewall and notate this in the database.
         '''
+        logging.info(f"Downloading {release['version']} from firewall.")
         os.chdir(self._download_dir)
         self._driver.get(release['link'])
         filename = f"Updates_{release['version']}.html"
