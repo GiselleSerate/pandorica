@@ -29,7 +29,7 @@ import logging
 from multiprocessing import Pool
 
 from elasticsearch_dsl import connections, Search, UpdateByQuery
-from elasticsearch.exceptions import ConflictError, ConnectionTimeout, RequestError, TransportError
+from elasticsearch.exceptions import ConflictError, ConnectionTimeout, NotFoundError, RequestError, TransportError
 
 from lib.dnsutils import updateAfStats, getDomainDoc
 
@@ -71,13 +71,13 @@ def process_hit(hit):
         # No tag available. Note that we have processed this entry (but with no tags) and stop.
         logging.info(f"No tag on {hit.domain}.")
         no_tag_update = (UpdateByQuery(index=f"content_*")
-                         .query('match', domain=hit.domain)
+                         .query('match', domain__keyword=hit.domain)
                          .script(source='ctx._source.processed=1', lang='painless'))
         while True:
             try:
                 no_tag_update.execute()
                 return
-            except ConnectionTimeout:
+            except (ConnectionTimeout, NotFoundError, RequestError, TransportError):
                 # Retry.
                 pass
             except ConflictError:
@@ -89,7 +89,7 @@ def process_hit(hit):
 
     # Write first tag to db.
     tag_update = (UpdateByQuery(index=f"content_*")
-                  .query('match', domain=hit.domain)
+                  .query('match', domain__keyword=hit.domain)
                   .script(source='ctx._source.tag=params.tag;'
                                  'ctx._source.tag_name=params.tag_name;'
                                  'ctx._source.public_tag_name=params.public_tag_name;'
@@ -103,15 +103,13 @@ def process_hit(hit):
         try:
             tag_update.execute()
             return
-        except ConnectionTimeout:
+        except (ConnectionTimeout, NotFoundError, RequestError, TransportError):
             # Retry.
             pass
         except ConflictError:
             # Can't be solved by retry. Skip for now.
             logging.error(f"Elasticsearch conflict (409) writing {hit.domain} to db. {write_dict['tag']} Skipping.")
             return
-        except RequestError:
-            logging.warning(f"Encountered request error on {hit.domain}. {write_dict['tag']} Retrying.")
 
 
 def process_domains():
@@ -123,17 +121,19 @@ def process_domains():
 
     # Search for non-processed and non-generic.
     new_nongeneric_search = (Search(index=f"content_*")
-                             .exclude('term', header='generic')
+                             .exclude('term', header__keyword='generic')
                              .query('match', processed=0))
     new_nongeneric_search.execute()
 
     # Determine how many AutoFocus points we have.
-    updateAfStats()
-    af_stats_search = Search(index='af-details')
-    af_stats_search.execute()
+    day_af_reqs_left = None
+    while day_af_reqs_left == None:
+        updateAfStats()
+        af_stats_search = Search(index='af-details')
+        af_stats_search.execute()
 
-    for hit in af_stats_search:
-        day_af_reqs_left = int(hit.daily_points_remaining / 12)
+        for hit in af_stats_search:
+            day_af_reqs_left = int(hit.daily_points_remaining / 12)
 
     with Pool() as pool:
         iterator = pool.imap(process_hit, new_nongeneric_search.scan())

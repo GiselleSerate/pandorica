@@ -28,8 +28,10 @@ Use at your own risk.
 
 import logging
 import os
+from time import sleep
 
 from dotenv import load_dotenv
+from elasticsearch import Elasticsearch
 from elasticsearch_dsl import connections, Search
 
 import parser
@@ -39,37 +41,40 @@ from testcases import ParseTest
 
 
 def test_autofocus(parse_test):
-    # Assume that we have already parsed and have a good database. 
+    # Assume that we have already parsed and have a good database.
     fields = ['tag_group', 'public_tag_name', 'tag_class', 'description', 'tag']
     # Try processing 10 times. That's probably enough.
-    for _ in range(10):
-        process_domains()
+    # for _ in range(10):
+    process_domains()
 
-    processedSearch = Search(index=f"content_{parse_test.version}").query('match', processed=2)
-    processedSearch.execute()
+    processed_search = Search(index=f"content_{parse_test.version}").query('match', processed=2)
+    processed_search.execute()
     num_processed = 0
-    for hit in processedSearch.scan():
+    for hit in processed_search.scan():
         # Check that each of these specific cases have some information in the database.
         for field in fields:
-            assert hit[field] != None, f"Domain {hit['domain']} missing field {field}."
-        num_processed += 1
-    processedSearch = Search(index=f"content_{parse_test.version}").query('match', processed=1)
-    processedSearch.execute()
-    for hit in processedSearch.scan():
-        # Just count these.
-        num_processed += 1
+            assert hit[field] is not None, f"Domain {hit['domain']} missing field {field}."
+    num_processed += processed_search.count()['value']
+    partly_processed_search = Search(index=f"content_{parse_test.version}").query('match', processed=1)
+    num_processed += partly_processed_search.count()
+
+    # Count non-generic domains (the domains which should have been processed).
+    non_generic_search = Search(index=f"content_{parse_test.version}").exclude('term', header__keyword='generic')
+    num_non_generic = non_generic_search.count()
+
     # Check to see what percentage of the domains have processed.
-    percent_processed = float(num_processed) / parse_test.num_domains
+    logging.info(f"Processed {num_processed} out of {num_non_generic}.")
+    percent_processed = float(num_processed) / float(num_non_generic)
     logging.info(f"Processed {percent_processed*100}% of domains.")
     assert percent_processed >= parse_test.percent_processed, (f"Processed only {percent_processed*100}% "
-                                                               "of domains, not {parse_test.percent_processed*100}%.")
+                                                               f"of domains, not {parse_test.percent_processed*100}%.")
 
 
 if __name__ == '__main__':
     # Initialize test settings.
     parse_test = ParseTest()
 
-    # Connect to a different port so you don't accidentally nuke your data.
+    # Set up connection.
     connections.create_connection(host=f"localhost")
 
     # Set up update details so try_parse can verify it.
@@ -106,21 +111,32 @@ if __name__ == '__main__':
 
     # Now check to see if some representative domains are in the database, with fields as expected.
     for case in parse_test.cases:
-        domSearch = (Search(index=f"content_{parse_test.version}")
-                     .query('match', domain=case['domain']))
-        domSearch.execute()
+        present = False
 
-        for hit in domSearch:
-            for key, value in case.items():
-                # Generic domains have no threat name; will give key error.
-                if case['header'] == 'generic' and key == 'threat_name':
-                    continue
-                assert hit[key] == value, f"Mismatch on {key}, {value}: is {hit[key]} instead."
+        # Permit retry, in case there's a problem.
+        for _ in range(100):
+            dom_search = (Search(index=f"content_{parse_test.version}")
+                          .query('match', domain__keyword=case['domain']))
+            dom_search.execute()
+
+            for hit in dom_search:
+                logging.debug(hit)
+                present = True
+                for key, value in case.items():
+                    # Generic domains have no threat name; will give key error.
+                    if case['header'] == 'generic' and key == 'threat_name':
+                        continue
+                    assert hit[key] == value, f"Mismatch on {key}, {value}: is {hit[key]} instead."
+            if present:
+                break
+            sleep(5)
+
+        assert present, f"Domain {case['domain']} is missing."
 
     # Verify that the version in update-details has had its status updated, since we just parsed.
-    updateSearch = Search(index='update-details').query('match', id=parse_test.version)
-    updateSearch.execute()
-    for hit in updateSearch:
+    update_search = Search(index='update-details').query('match', id=parse_test.version)
+    update_search.execute()
+    for hit in update_search:
         assert hit['status'] == DocStatus.PARSED.value
 
     # Test autofocus query code

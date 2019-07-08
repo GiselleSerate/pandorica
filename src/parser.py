@@ -32,6 +32,7 @@ from threading import Thread
 import os
 
 from bs4 import BeautifulSoup
+from elasticsearch.exceptions import ConflictError
 from elasticsearch_dsl import connections, Index, Search, UpdateByQuery
 
 from domain_docs import RetryException, MaintenanceException, DomainDocument
@@ -176,7 +177,7 @@ def run_parser(path, version, date):
             if index.exists():
                 # Search for metadoc to see if it was fully written
                 meta_search = (Search(index='update-details')
-                               .query('match', version=version))
+                               .query('match', version__keyword=version))
                 meta_search.execute()
                 complete = 0 # By default, assume incomplete
                 for hit in meta_search:
@@ -256,10 +257,15 @@ def try_parse(path, version, date):
 
     # Tell update details that downloaded version has been consumed.
     ubq = (UpdateByQuery(index='update-details')
-           .query('match', version=version)
+           .query('match', version__keyword=version)
            .script(source='ctx._source.status=params.status',
                    lang='painless', params={'status':DocStatus.PARSED.value}))
-    ubq.execute()
+    while True:
+        try:
+            ubq.execute()
+            break
+        except ConflictError:
+            logging.warning("Conflict with Elasticsearch, retrying.")
 
 
 def get_unanalyzed_version_details():

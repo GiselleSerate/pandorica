@@ -262,7 +262,7 @@ class FirewallScraper:
         self.num_new_releases = 0
         for release in self._versions:
             version_search = (Search(index='update-details')
-                              .query('match', version=release['version']))
+                              .query('match', version__keyword=release['version']))
             version_search.execute()
             downloaded = False
             for hit in version_search:

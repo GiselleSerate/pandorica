@@ -7,13 +7,18 @@ class ParseTest():
         self.version = '3026-3536'
         self.version_date = '2019-07-01T04:00:52-07:00'
 
-        self.num_domains = 7107 + 7106
         # If we process this much or more, we pass
         self.percent_processed = 0.5
 
 
         # Establish cases to check are in the database.
-        self.cases = [{'raw': 'generic:hailmaryfulloffacts.com', 'action': 'added'},
-                      {'raw': 'TrojanDownloader.upatre:advancehomesbd.com', 'action': 'added'},
-                      {'raw': 'generic:aceheartinstitute.com', 'action': 'removed'},
-                      {'raw': 'Backdoor.bladabindi:linakamisa.duckdns.org', 'action': 'removed'}]
+        self.cases = [{'raw': 'TrojanDownloader.upatre:hngdecor.com', 'action': 'added'},
+                      {'raw': 'generic:cityofangelsmagazine.com', 'action': 'removed'},
+                      {'raw': 'Virus.sality:www.greenbeach.de', 'action': 'added'},
+                      {'raw': 'Trojan.delf:www.universal101.com', 'action': 'added'},
+                      {'raw': 'Trojan.fakefolder:hohoho.ho.funpic.org', 'action': 'added'},
+                      {'raw': 'Worm.ainslot:ilovebug.no-ip.org', 'action': 'added'},
+                      {'raw': 'Worm.pykspa:zztxii.info', 'action': 'added'},
+                      {'raw': 'Virus.sality:www.indiatouristtaxi.com', 'action': 'added'},
+                      {'raw': 'Malware.gandcrab:booomaahuuoooapl.com', 'action': 'removed'},
+                      {'raw': 'generic:bensoleimani.com', 'action': 'added'}]
