@@ -70,12 +70,12 @@ def process_hit(hit):
     except (AttributeError, IndexError):
         # No tag available. Note that we have processed this entry (but with no tags) and stop.
         logging.info(f"No tag on {hit.domain}.")
-        ubq = (UpdateByQuery(index=f"content_*")
-               .query('match', domain=hit.domain)
-               .script(source='ctx._source.processed=1', lang='painless'))
+        no_tag_update = (UpdateByQuery(index=f"content_*")
+                         .query('match', domain=hit.domain)
+                         .script(source='ctx._source.processed=1', lang='painless'))
         while True:
             try:
-                ubq.execute()
+                no_tag_update.execute()
                 return
             except ConnectionTimeout:
                 # Retry.
@@ -88,20 +88,20 @@ def process_hit(hit):
     logging.info(f"Tag on {hit.domain}.")
 
     # Write first tag to db.
-    ubq = (UpdateByQuery(index=f"content_*")
-           .query('match', domain=hit.domain)
-           .script(source='ctx._source.tag=params.tag;'
-                          'ctx._source.tag_name=params.tag_name;'
-                          'ctx._source.public_tag_name=params.public_tag_name;'
-                          'ctx._source.tag_class=params.tag_class;'
-                          'ctx._source.tag_group=params.tag_group;'
-                          'ctx._source.description=params.description;'
-                          'ctx._source.source=params.source;'
-                          'ctx._source.processed=2',
-                   lang='painless', params=write_dict))
+    tag_update = (UpdateByQuery(index=f"content_*")
+                  .query('match', domain=hit.domain)
+                  .script(source='ctx._source.tag=params.tag;'
+                                 'ctx._source.tag_name=params.tag_name;'
+                                 'ctx._source.public_tag_name=params.public_tag_name;'
+                                 'ctx._source.tag_class=params.tag_class;'
+                                 'ctx._source.tag_group=params.tag_group;'
+                                 'ctx._source.description=params.description;'
+                                 'ctx._source.source=params.source;'
+                                 'ctx._source.processed=2',
+                          lang='painless', params=write_dict))
     while True:
         try:
-            ubq.execute()
+            tag_update.execute()
             return
         except ConnectionTimeout:
             # Retry.
