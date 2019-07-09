@@ -1,11 +1,11 @@
-workflows:
-  version: 2
-  main:
-    jobs:
-      - build:
-          filters:
-            branches:
-              only: develop
+# workflows:
+#   version: 2
+#   main:
+#     jobs:
+#       - build:
+#           filters:
+#             branches:
+#               only: develop
 
 # Python CircleCI 2.0 configuration file
 version: 2
