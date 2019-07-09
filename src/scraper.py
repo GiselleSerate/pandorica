@@ -207,7 +207,7 @@ class FirewallScraper:
                     sleep(1)
 
             # Wait for updates to load in (otherwise we will get the old updates).
-            sleep(5)
+            sleep(10)
 
             # Wait for page to load.
             timeout = 30
