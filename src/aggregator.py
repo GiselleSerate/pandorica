@@ -25,6 +25,9 @@ This software is provided without support, warranty, or guarantee.
 Use at your own risk.
 '''
 
+from datetime import datetime
+from statistics import mean
+
 from elasticsearch_dsl import connections, DocType, Integer, Keyword, Search, Text, UpdateByQuery
 
 import logging
@@ -53,6 +56,8 @@ class AggregateDocument(DocType):
     id = Text(analyzer='snowball', fields={'raw': Keyword()})
     domain = Keyword()
     tot_count = Integer()
+    residence_avg = Integer()
+    reinsert_avg = Integer()
 
 
     class Index:
@@ -72,13 +77,30 @@ class AggregateDocument(DocType):
         return cls(
             id=obj.id,
             domain=obj.domain,
-            tot_count=obj.tot_count
+            tot_count=obj.tot_count,
+            residence_avg=obj.residence_avg,
+            reinsert_avg=obj.reinsert_avg
             )
 
 
     def save(self, **kwargs):
         return super(AggregateDocument, self).save(**kwargs)
 
+
+
+def date_difference(earlier, later):
+    # Dates accepted in 2019-06-22T04:00:23-07:00.
+    # Assume hour is not in military time.
+    fstring = "%Y-%m-%dT%I:%M:%S%z"
+    # Rip final colon out.
+    earlier = earlier[:-3] + earlier[-2:]
+    later = later[:-3] + later[-2:]
+    # Convert to datetimes.
+    early_date = datetime.strptime(earlier, fstring)
+    late_date = datetime.strptime(later, fstring)
+    # Calculate difference.
+    difference = late_date - early_date
+    return difference.days
 
 
 def aggregate_domains():
@@ -90,21 +112,48 @@ def aggregate_domains():
     all_search = Search(index=f"content_*")
     all_search.execute()
 
+    # Iterate over all events
     for hit in all_search.scan():
+        data = {}
+        data['action'] = hit['action']
+        data['date'] = hit['date']
+        # Add this event to the handled dictionary under the relevant domain.
         try:
-            handled[hit['domain']] += 1
+            handled[hit['domain']].append(data)
         except KeyError:
-            handled[hit['domain']] = 1
+            handled[hit['domain']] = []
+            handled[hit['domain']].append(data)
 
     logging.info("Finished getting all domains. Here goes.")
 
-    for key, value in handled.items():
-        if value >= 3:
-            logging.info(key)
-            aggregate_doc = AggregateDocument()
-            aggregate_doc.domain = key
-            aggregate_doc.tot_count = value
+    for domain, events in handled.items():
+        if len(events) >= 2:
+            handled[domain].sort(key=lambda event: event['date'])
+            residences = []
+            reinserts = []
+
+            # Loop over the start dates except for the last.
+            for index in range(len(handled[domain]) - 1):
+                # Compare next date to this date.
+                difference = date_difference(handled[domain][index]['date'], handled[domain][index + 1]['date'])
+                if handled[domain][index]['action'] == 'added':
+                    residences.append(difference)
+                else:
+                    reinserts.append(difference)
+
+            # Save the document.
+            logging.info(f"Saving {domain}")
+            aggregate_doc = AggregateDocument(meta={'id':domain})
+            aggregate_doc.domain = domain
+            aggregate_doc.tot_count = len(events)
+            if len(residences) >= 1:
+                aggregate_doc.residence_avg = mean(residences)
+                logging.info(f"Residence time: {aggregate_doc.residence_avg}")
+            if len(reinserts) >= 1:
+                aggregate_doc.reinsert_avg = mean(reinserts)
+                logging.info(f"Reinsert time: {aggregate_doc.reinsert_avg}")
             aggregate_doc.save()
+
 
 
 if __name__ == '__main__':
