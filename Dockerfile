@@ -16,9 +16,9 @@ RUN ["/root/.env/bin/pip", "install", "--upgrade", "pip"]
 RUN ["/root/.env/bin/pip", "install", "-r", "requirements.txt"]
 
 # Get driver
-RUN ["wget", "https://chromedriver.storage.googleapis.com/2.41/chromedriver_linux64.zip"]
-RUN ["unzip", "chromedriver_linux64.zip"]
-RUN ["mv", "chromedriver", "/usr/bin/chromedriver"]
+# RUN ["wget", "https://chromedriver.storage.googleapis.com/2.41/chromedriver_linux64.zip"]
+# RUN ["unzip", "chromedriver_linux64.zip"]
+# RUN ["mv", "chromedriver", "/usr/bin/chromedriver"]
 
 
 COPY src /app/src

@@ -1,6 +1,6 @@
-# If this exists, it might be bad
-python -m venv .env
-pip install -r requirements.txt
+# # If this exists, it might be bad
+# python -m venv .env
+# pip install -r requirements.txt
 
 # Activate venv
 source .env/bin/activate
