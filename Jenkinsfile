@@ -2,6 +2,7 @@ node {
     checkout scm
 
     docker.image('python:3.7-alpine3.9').withRun() { b ->
+        // Wait, this is with. I want in.
         sh 'whoami'
         sh 'python -V'
         sh 'uname -a'
