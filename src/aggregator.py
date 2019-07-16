@@ -26,12 +26,11 @@ Use at your own risk.
 '''
 
 from datetime import datetime
-from statistics import mean
-
-from elasticsearch_dsl import connections, DocType, Integer, Keyword, Search, Text, UpdateByQuery
-
 import logging
 from logging.config import dictConfig
+from statistics import mean
+
+from elasticsearch_dsl import connections, DocType, Integer, Keyword, Search, Text
 
 
 dictConfig({
@@ -89,22 +88,29 @@ class AggregateDocument(DocType):
 
 
 def date_difference(earlier, later):
-    # Dates accepted in 2019-06-22T04:00:23-07:00.
+    '''
+    Calculates the positive difference between two dates.
+    Tolerant of passsing either date first.
+    Dates accepted in formats like 2019-06-22T04:00:23-07:00.
+    '''
     # Assume hour is not in military time.
     fstring = "%Y-%m-%dT%I:%M:%S%z"
-    # Rip final colon out.
+    # Rip final colon out so the dates are parseable.
     earlier = earlier[:-3] + earlier[-2:]
     later = later[:-3] + later[-2:]
     # Convert to datetimes.
     early_date = datetime.strptime(earlier, fstring)
     late_date = datetime.strptime(later, fstring)
+    # If the earlier date isn't really earlier, switch.
+    if early_date > late_date:
+        late_date, early_date = early_date, late_date
     # Calculate difference.
     difference = late_date - early_date
     return difference.days
 
 
 def aggregate_domains():
-    '''Sum all domains over all indices.'''
+    '''Sums all domains over all indices.'''
     connections.create_connection(host='localhost')
 
     handled = {}
@@ -135,7 +141,8 @@ def aggregate_domains():
             # Loop over the start dates except for the last.
             for index in range(len(handled[domain]) - 1):
                 # Compare next date to this date.
-                difference = date_difference(handled[domain][index]['date'], handled[domain][index + 1]['date'])
+                difference = date_difference(handled[domain][index]['date'],
+                                             handled[domain][index + 1]['date'])
                 if handled[domain][index]['action'] == 'added':
                     residences.append(difference)
                 else:

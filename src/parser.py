@@ -32,6 +32,7 @@ from threading import Thread
 import os
 
 from bs4 import BeautifulSoup
+from dotenv import load_dotenv
 from elasticsearch.exceptions import ConflictError
 from elasticsearch_dsl import connections, Index, Search, UpdateByQuery
 
@@ -39,11 +40,6 @@ from domain_docs import RetryException, MaintenanceException, DomainDocument
 from domain_processor import process_domains
 from scraper import DocStatus, FirewallScraper
 
-
-
-from logging.config import dictConfig
-from dotenv import load_dotenv
-import os
 
 
 home = os.getenv('HOME')
@@ -193,7 +189,6 @@ def run_parser(path, version, date):
         except ConnectionError:
             # Retry.
             logging.warning("Connection error, retrying.")
-            pass
 
     # Create new index
     index.create()
@@ -305,5 +300,7 @@ if __name__ == '__main__':
         try_parse(path=f"{os.getenv('DOWNLOAD_DIR')}/Updates_{ver['version']}.html",
                   version=ver['version'], date=ver['date'])
 
-    # Finally, ask AutoFocus about all unprocessed non-generic domains.
-    process_domains()
+    # Finally, ask AutoFocus about all unprocessed non-generic domains
+    # multiple times (in case of failure).
+    for _ in range(3):
+        process_domains()

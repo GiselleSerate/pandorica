@@ -5,6 +5,8 @@ source .env/bin/activate
 if (docker ps | grep myelk_con > /dev/null 2>&1); then
 	echo Triggering parse script.
 	python src/parser.py
+	echo Triggering aggregate script.
+	python src/aggregator.py
 	exit 0
 else
 	echo Please start the elk docker container and try again.
