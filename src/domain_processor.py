@@ -28,7 +28,7 @@ Use at your own risk.
 import logging
 from multiprocessing import Pool
 
-from elasticsearch_dsl import connections, Search, UpdateByQuery
+from elasticsearch_dsl import Search, UpdateByQuery
 from elasticsearch.exceptions import ConflictError, ConnectionTimeout, NotFoundError, RequestError, TransportError
 
 from lib.dnsutils import updateAfStats, getDomainDoc
@@ -77,13 +77,14 @@ def process_hit(hit):
             try:
                 no_tag_update.execute()
                 return
+            except ConflictError:
+                # Can't be solved by retry. Skip for now.
+                logging.error(f"Elasticsearch conflict (409) writing "
+                              f"{hit.domain} to db. (No tag, which is not the problem.) Skipping.")
+                return
             except (ConnectionTimeout, NotFoundError, RequestError, TransportError):
                 # Retry.
                 pass
-            except ConflictError:
-                # Can't be solved by retry. Skip for now.
-                logging.error(f"Elasticsearch conflict (409) writing {hit.domain} to db. (No tag, which is not the problem.) Skipping.")
-                return
 
     logging.info(f"Tag on {hit.domain}.")
 
@@ -103,21 +104,22 @@ def process_hit(hit):
         try:
             tag_update.execute()
             return
+        except ConflictError:
+            # Can't be solved by retry. Skip for now.
+            logging.error(f"Elasticsearch conflict (409) writing "
+                          f"{hit.domain} to db. {write_dict['tag']} Skipping.")
+            return
         except (ConnectionTimeout, NotFoundError, RequestError, TransportError):
             # Retry.
             pass
-        except ConflictError:
-            # Can't be solved by retry. Skip for now.
-            logging.error(f"Elasticsearch conflict (409) writing {hit.domain} to db. {write_dict['tag']} Skipping.")
-            return
 
 
 def process_domains():
-    '''Use AutoFocus to process all unprocessed non-generic domains in any index.'''
-
-    # Necessary if you don't run the parser first.
-    # Establish database connection (port 9200 by default).
-    connections.create_connection(host='localhost')
+    '''
+    Use AutoFocus to process all unprocessed non-generic domains in any index.
+    Note that you MUST create a database connection first (with connections.create_connection)
+    before running this function.
+    '''
 
     # Search for non-processed and non-generic.
     new_nongeneric_search = (Search(index=f"content_*")
@@ -127,7 +129,7 @@ def process_domains():
 
     # Determine how many AutoFocus points we have.
     day_af_reqs_left = None
-    while day_af_reqs_left == None:
+    while day_af_reqs_left is None:
         updateAfStats()
         af_stats_search = Search(index='af-details')
         af_stats_search.execute()

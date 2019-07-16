@@ -277,7 +277,7 @@ def get_unanalyzed_version_details():
 
 
 if __name__ == '__main__':
-    connections.create_connection(host='localhost')
+    connections.create_connection(host=os.getenv('ELASTIC_IP'))
 
     # Download latest release notes.
     scraper = FirewallScraper(ip=os.getenv('FW_IP'), username=os.getenv('FW_USERNAME'),
