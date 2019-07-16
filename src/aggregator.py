@@ -93,8 +93,8 @@ def date_difference(earlier, later):
     Tolerant of passsing either date first.
     Dates accepted in formats like 2019-06-22T04:00:23-07:00.
     '''
-    # Assume hour is not in military time.
-    fstring = "%Y-%m-%dT%I:%M:%S%z"
+    # Hour is in military time.
+    fstring = "%Y-%m-%dT%H:%M:%S%z"
     # Rip final colon out so the dates are parseable.
     earlier = earlier[:-3] + earlier[-2:]
     later = later[:-3] + later[-2:]
