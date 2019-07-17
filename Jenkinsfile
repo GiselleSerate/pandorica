@@ -7,10 +7,10 @@ node {
 
         // Set up python.
         sh 'python3.7 -m venv .env'
-        sh 'source .env/bin/activate'
+        sh '. .env/bin/activate'
 
-        sh 'sudo apk --update add python py-pip openssl ca-certificates py-openssl wget'
-        sh 'sudo apk --update add --virtual build-dependencies libffi-dev openssl-dev python-dev py-pip build-base && pip install --upgrade pip && pip install -r requirements.txt && sudo apk del build-dependencies'
+        // sh 'sudo apk --update add python py-pip openssl ca-certificates py-openssl wget'
+        // sh 'sudo apk --update add --virtual build-dependencies libffi-dev openssl-dev python-dev py-pip build-base && pip install --upgrade pip && pip install -r requirements.txt && sudo apk del build-dependencies'
 
         // sh 'pip install --upgrade pip'
         // sh 'pip install -r requirements.txt --no-cache-dir' // Here's a problem
@@ -21,7 +21,7 @@ node {
             sh 'while ! nc -z localhost 9200; do sleep 1; done'
 
             // Run tests
-            sh 'source .env/bin/activate'
+            sh '. .env/bin/activate'
             sh 'pytest -v src'
         }
     }
