@@ -1,7 +1,8 @@
 node {
     checkout scm
 
-    docker.image('python:3.7-alpine3.9').inside() { b ->
+    // docker.image('python:3.7-alpine3.9').inside() { b ->
+    docker.build('pandorica', '.').inside() { b ->
         sh 'python -V'
 
         // Set up python.

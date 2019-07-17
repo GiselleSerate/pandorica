@@ -1,4 +1,4 @@
-FROM dorowu/ubuntu-desktop-lxde-vnc:bionic
+FROM ubuntu:bionic
 
 LABEL description="Pandorica"
 LABEL version="0.1"
@@ -8,10 +8,10 @@ WORKDIR /app
 ADD requirements.txt /app/requirements.txt
 
 SHELL ["/bin/bash", "-c"]
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y install --no-upgrade software-properties-common build-essential python-dev python-setuptools python3-pip python3.6-venv wget unzip
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y install --no-upgrade software-properties-common build-essential python-dev python-setuptools python3-pip python3.7-venv wget unzip
 
 # Set up Python virtual env
-RUN ["python3.6", "-m", "venv", "/root/.env"]
+RUN ["python3.7", "-m", "venv", "/root/.env"]
 RUN ["/root/.env/bin/pip", "install", "--upgrade", "pip"]
 RUN ["/root/.env/bin/pip", "install", "-r", "requirements.txt"]
 
