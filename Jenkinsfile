@@ -5,8 +5,8 @@ node {
         sh 'python -V'
 
         // Set up python.
-        sh 'python -m venv venv'
-        sh 'source venv/bin/activate'
+        sh 'python -m venv .env'
+        sh 'source .env/bin/activate'
         // sh 'pip install --upgrade pip'
         sh 'pip install -r requirements.txt --no-cache-dir' // Here's a problem
 
@@ -16,7 +16,7 @@ node {
             sh 'while ! nc -z localhost 9200; do sleep 1; done'
 
             // Run tests
-            sh '. venv/bin/activate'
+            sh 'source .env/bin/activate'
             sh 'pytest -v src'
         }
     }
