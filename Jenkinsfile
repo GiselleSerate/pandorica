@@ -3,10 +3,10 @@ node {
 
     // docker.image('python:3.7-alpine3.9').inside() { b ->
     docker.build('pandorica', '.').inside() { b ->
-        sh 'python -V'
+        sh 'python3.7 -V'
 
         // Set up python.
-        sh 'python -m venv .env'
+        sh 'python3.7 -m venv .env'
         sh 'source .env/bin/activate'
 
         sh 'sudo apk --update add python py-pip openssl ca-certificates py-openssl wget'
