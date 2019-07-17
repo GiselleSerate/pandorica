@@ -7,8 +7,12 @@ node {
         // Set up python.
         sh 'python -m venv .env'
         sh 'source .env/bin/activate'
+
+        sh 'apk --update add python py-pip openssl ca-certificates py-openssl wget'
+        sh 'apk --update add --virtual build-dependencies libffi-dev openssl-dev python-dev py-pip build-base && pip install --upgrade pip && pip install -r requirements.txt && apk del build-dependencies'
+
         // sh 'pip install --upgrade pip'
-        sh 'pip install -r requirements.txt --no-cache-dir' // Here's a problem
+        // sh 'pip install -r requirements.txt --no-cache-dir' // Here's a problem
 
         docker.image('sebp/elk:720').withRun('-p 9200:9200 -p 5601:5601 -v ~/data/backups:/var/backups -v ~/data/elastictest:/var/lib/elasticsearch --name testelk_con sebp/elk:latest') { c ->
             /* Wait until elk service is up */
