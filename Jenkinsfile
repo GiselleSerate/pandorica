@@ -19,6 +19,8 @@ node {
 
     }
 
+    sh 'docker rmi testelk_con'
+    
     docker.image('sebp/elk:720').withRun('-p 9200:9200 -p 5601:5601 -v ~/data/backups:/var/backups -v ~/data/elastictest:/var/lib/elasticsearch --name testelk_con') { c ->
         sh 'echo um awkward'
     }
