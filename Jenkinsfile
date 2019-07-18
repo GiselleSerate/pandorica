@@ -2,9 +2,8 @@ node {
     checkout scm
 
     // docker.image('python:3.7-alpine3.9').inside() { b ->
-    def app
-    app = docker.build('pandorica', '.')
-    app.inside() { b ->
+    def app = docker.build('pandorica', '.')
+    app.inside() {
         sh 'python3.7 -V'
 
         // Set up python.
@@ -25,7 +24,7 @@ node {
         sh 'echo um awkward'
     }
     // Wait what?
-    app.inside() { d ->
+    app.inside() {
         /* Wait until elk service is up */
         // sh 'while ! mysqladmin ping -h0.0.0.0 --silent; do sleep 1; done'
         sh 'while ! nc -z localhost 9200; do sleep 1; done'
