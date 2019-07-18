@@ -38,7 +38,7 @@ from elasticsearch_dsl import connections, Index, Search, UpdateByQuery
 
 from domain_docs import RetryException, MaintenanceException, DomainDocument
 from domain_processor import process_domains
-from scraper import DocStatus, FirewallScraper
+from scraper import DocStatus, ElasticFirewallScraper
 
 
 
@@ -73,6 +73,7 @@ def parse_and_write(soup, string_name, pattern, array, date, version, thread_sta
     Pulls all domains of one type from the soup and then writes them to the database.
 
     Keyword arguments:
+    soup -- the soup to parse
     string_name -- the string representation of the type of docs
     pattern -- the section header pattern to find in the soup
     array -- the array to put items in after they have been parsed
@@ -158,9 +159,6 @@ def run_parser(path, version, date):
     # Parse file
     soup = BeautifulSoup(data, 'html5lib')
 
-
-    # Establish database connection (port 9200 by default)
-    connections.create_connection(host=os.getenv('ELASTIC_IP'))
 
     logging.info(f'Writing updates for version {version} (released {date}).')
 
@@ -280,12 +278,12 @@ if __name__ == '__main__':
     connections.create_connection(host=os.getenv('ELASTIC_IP'))
 
     # Download latest release notes.
-    scraper = FirewallScraper(ip=os.getenv('FW_IP'), username=os.getenv('FW_USERNAME'),
-                              password=os.getenv('FW_PASSWORD'),
-                              chrome_driver=os.getenv('DRIVER'),
-                              binary_location=os.getenv('BINARY_LOCATION'),
-                              elastic_ip=os.getenv('ELASTIC_IP'),
-                              download_dir=os.getenv('DOWNLOAD_DIR'))
+    scraper = ElasticFirewallScraper(ip=os.getenv('FW_IP'), username=os.getenv('FW_USERNAME'),
+                                     password=os.getenv('FW_PASSWORD'),
+                                     chrome_driver=os.getenv('DRIVER'),
+                                     binary_location=os.getenv('BINARY_LOCATION'),
+                                     elastic_ip=os.getenv('ELASTIC_IP'),
+                                     download_dir=os.getenv('DOWNLOAD_DIR'))
     scraper.full_download()
 
     # Parse domains and write them to the database.
