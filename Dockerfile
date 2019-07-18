@@ -1,3 +1,4 @@
+# Only for testing. Don't use for actual deployment, because some of these things rely on things in the test environment. I'm not going to type out an essay in this line about how I know this is bad. Roll with it for now.
 FROM ubuntu:bionic
 
 LABEL description="Pandorica"
@@ -15,14 +16,12 @@ RUN ["python3.7", "-m", "venv", "/root/.env"]
 RUN ["/root/.env/bin/pip", "install", "--upgrade", "pip"]
 RUN ["/root/.env/bin/pip", "install", "-r", "requirements.txt"]
 
-# Get driver
-# RUN ["wget", "https://chromedriver.storage.googleapis.com/2.41/chromedriver_linux64.zip"]
-# RUN ["unzip", "chromedriver_linux64.zip"]
-# RUN ["mv", "chromedriver", "/usr/bin/chromedriver"]
-
-
 COPY src /app/src
 
 EXPOSE 80 5900
+
+# This is the testing stuff (and it is wrong)
+RUN ["while", "!", "nc", "-z", "localhost", "9200;", "do", "sleep", "1;", "done"]
+RUN ["pytest", "-v"]
 
 # RUN ["/root/.env/bin/python", "/app/src/parser.py"]
