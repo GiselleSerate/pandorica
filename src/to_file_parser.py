@@ -99,9 +99,11 @@ def parse(soup, pattern, array):
             # Extract domains from "Suspicious DNS Query" parentheses
             result = re.search(r'\((.*)\)', raw_scrape)
             if result is None:
-                array.append(raw_scrape.split(':')[1])
+                split = raw_scrape.split(':')
             else:
-                array.append(result.group(1).split(':')[1])
+                split = result.group(1).split(':')
+            if 'Backdoor' in split[0] or 'Virus' in split[0] or 'generic' in split[0]:
+                array.append(split[1])
 
     except Exception as e:
         logging.error(f"Parse of failed. "
@@ -130,7 +132,9 @@ if __name__ == '__main__':
     # Domains get stored here
     all_domains = []
 
-    path = f"{os.getenv('DOWNLOAD_DIR')}/Updates_{scraper.versions[0]['version']}.html"
+    # Open version file
+    latest_version = max(scraper.versions, key=lambda x: x['date'])['version']
+    path = f"{os.getenv('DOWNLOAD_DIR')}/Updates_{latest_version}.html"
 
     try:
         data = open(path)
@@ -142,18 +146,9 @@ if __name__ == '__main__':
     soup = BeautifulSoup(data, 'html5lib')
 
 
-    # Start threads for adds and removes
-    # Note that we don't actually care which is which; we're just parallelizing cause we can.
-    added_thread = Thread(target=parse,
-                          args=(soup, re.compile(os.getenv('ADD_REGEX')),
-                                all_domains))
-    added_thread.start()
-    removed_thread = Thread(target=parse,
-                            args=(soup, re.compile(os.getenv('REM_REGEX')),
-                                  all_domains))
-    removed_thread.start()
-    added_thread.join()
-    removed_thread.join()
+    # Just parse added
+    parse(soup, re.compile(os.getenv('ADD_REGEX')), all_domains)
+
 
     # Write both added and removed arrays to file.
     write_path = next_path(f"{os.getenv('PARSED_DIR')}/Parsed_", "txt")
