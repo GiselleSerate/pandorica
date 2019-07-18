@@ -66,19 +66,6 @@ dictConfig({
 
 
 
-def next_path(path_prefix, extension):
-    '''
-    Finds the next free path in an sequentially named list of files
-
-    path_prefix -- the beginning of the path, up to the varied part of the filename
-    extension -- txt, or csv, or some file extension; don't put the period
-    '''
-    seq_no = 0
-    while os.path.exists(f"{path_prefix}{seq_no}.{extension}"):
-        seq_no += 1
-    return f"{path_prefix}{seq_no}.{extension}"
-
-
 def parse(soup, pattern, array):
     '''
     Pulls all domains of one type from the soup and then writes them to the array.
@@ -151,9 +138,9 @@ if __name__ == '__main__':
 
 
     # Write both added and removed arrays to file.
-    write_path = next_path(f"{os.getenv('PARSED_DIR')}/Parsed_", "txt")
+    write_path = f"{os.getenv('PARSED_DIR')}/parsed.txt"
     try:
-        outfile = open(write_path, 'x')
+        outfile = open(write_path, 'w')
     except Exception as e:
         logging.error(f"Issue creating a new file as {write_path}.")
         raise e
@@ -162,4 +149,4 @@ if __name__ == '__main__':
         outfile.write(f"{domain}\n")
 
     outfile.close()
-    logging.info(f"Finished running. Find your new file at {write_path}.")
+    logging.info(f"Finished running. Find your new domains at {write_path}.")
