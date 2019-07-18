@@ -19,7 +19,7 @@ Palo Alto Networks parser.py
 
 Downloads and parses new version notes, then writes domains to Elasticsearch with autofocus details.
 
-Run this file with the config.py set as in the README.md.
+Run this file directly as the base. Don't forget to configure the .panrc.
 
 This software is provided without support, warranty, or guarantee.
 Use at your own risk.

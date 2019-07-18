@@ -19,7 +19,7 @@ Palo Alto Networks scraper.py
 
 Downloads the latest release notes off a PANW firewall.
 
-Run this with an associated config.py (see README.md).
+Don't run this file independently; intended as an include. Make sure to configure your .panrc.
 
 This software is provided without support, warranty, or guarantee.
 Use at your own risk.
@@ -306,14 +306,3 @@ class FirewallScraper:
         self._login()
         self._find_update_page()
         self._download_all_new_releases()
-
-
-
-if __name__ == '__main__':
-    scraper = FirewallScraper(ip=os.getenv('FW_IP'), username=os.getenv('FW_USERNAME'),
-                              password=os.getenv('FW_PASSWORD'),
-                              chrome_driver=os.getenv('DRIVER'),
-                              binary_location=os.getenv('BINARY_LOCATION'),
-                              download_dir=os.getenv('DOWNLOAD_DIR'),
-                              elastic_ip=os.getenv('ELASTIC_IP'))
-    scraper.full_download()
