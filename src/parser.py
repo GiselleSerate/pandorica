@@ -25,11 +25,11 @@ This software is provided without support, warranty, or guarantee.
 Use at your own risk.
 '''
 
-import re
 import logging
 from logging.config import dictConfig
-from threading import Thread
 import os
+import re
+from threading import Thread
 
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
@@ -282,8 +282,8 @@ if __name__ == '__main__':
                                      password=os.getenv('FW_PASSWORD'),
                                      chrome_driver=os.getenv('DRIVER'),
                                      binary_location=os.getenv('BINARY_LOCATION'),
-                                     elastic_ip=os.getenv('ELASTIC_IP'),
-                                     download_dir=os.getenv('DOWNLOAD_DIR'))
+                                     download_dir=os.getenv('DOWNLOAD_DIR'),
+                                     elastic_ip=os.getenv('ELASTIC_IP'))
     scraper.full_download()
 
     # Parse domains and write them to the database.

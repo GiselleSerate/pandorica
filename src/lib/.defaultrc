@@ -4,6 +4,9 @@
 # parsing will take longer, but assures recovery from momentary failures. 
 NUM_TRIES=5
 
+# Up to how many domains do we want output in our parsed files?
+NUM_DOMAINS_OUTPUT=None
+
 
 # ------------------------------- LOGGING --------------------------------------
 
@@ -34,6 +37,8 @@ BINARY_LOCATION=/Applications/Google Chrome.app/Contents/MacOS/Google Chrome
 DRIVER=${HOME}/chromedriver
 # Set the folder to download all release notes. 
 DOWNLOAD_DIR=${HOME}/versiondocs
+# Set the folder to put the files where we parse the domains into.
+PARSED_DIR=${HOME}/parsed
 
 
 # ----------------------------- ELASTICSTACK -----------------------------------
