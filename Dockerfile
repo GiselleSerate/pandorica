@@ -23,9 +23,11 @@ EXPOSE 80 5900
 
 RUN ["/app/test.sh"]
 
-RUN ["chmod", "+x", "/root/.env/bin/activate"]
-RUN ["/root/.env/bin/activate"]
-RUN ["pytest", "-v"]
+RUN ["pwd"]
+
+# RUN ["chmod", "+x", "/root/.env/bin/activate"]
+# RUN ["/root/.env/bin/activate"]
+RUN ["/root/.env/bin/python", "-m", "pytest", "-v"]
 
 # RUN ["/root/.env/bin/python", "/app/src/parser.py"]
 # TODO: OH NO WHERES YOUR PANRC
