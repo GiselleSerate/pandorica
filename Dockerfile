@@ -17,11 +17,15 @@ RUN ["/root/.env/bin/pip", "install", "--upgrade", "pip"]
 RUN ["/root/.env/bin/pip", "install", "-r", "requirements.txt"]
 
 COPY src /app/src
+COPY test.sh /app/test.sh
 
 EXPOSE 80 5900
 
-# This is the testing stuff (and it is wrong)
-RUN ["while", "!", "nc", "-z", "localhost", "9200;", "do", "sleep", "1;", "done"]
+RUN ["/app/test.sh"]
+
+RUN ["chmod", "+x", "/root/.env/bin/activate"]
+RUN ["/root/.env/bin/activate"]
 RUN ["pytest", "-v"]
 
 # RUN ["/root/.env/bin/python", "/app/src/parser.py"]
+# TODO: OH NO WHERES YOUR PANRC
