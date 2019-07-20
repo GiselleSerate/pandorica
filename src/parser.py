@@ -108,7 +108,12 @@ def parse_and_write(soup, string_name, pattern, array, date, version, thread_sta
     for raw in array:
         split_raw = raw.split(':')
         domain = split_raw[1]
-        split_header = split_raw[0].split('.')
+        if split_raw[0].startswith('Exploit-CVE'):
+            # It's an exploit, parse differently by splitting on the hyphen
+            split_char = '-'
+        else:
+            split_char = '.'
+        split_header = split_raw[0].split(split_char)
         # Create new DomainDocument in db
         domain_doc = DomainDocument(meta={'id':domain})
         domain_doc.meta.index = f'content_{version}'
