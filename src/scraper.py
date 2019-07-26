@@ -124,6 +124,9 @@ class FirewallScraper:
         self._download_dir = download_dir
         self.versions = []
 
+        self._login()
+        self._find_update_page()
+
 
     def __del__(self):
         self._driver.close()
@@ -238,19 +241,6 @@ class FirewallScraper:
         logging.debug(f"Discovered versions {self.versions}.")
 
 
-    def _download_latest_release(self):
-        '''Download the page source of only the latest release notes.'''
-        # Get the absolute latest release notes
-        latest = max(self.versions, key=lambda x: x['date'])
-        self._download_release(latest)
-
-
-    def _download_all_available_releases(self):
-        '''Download the page source for all releases still on the firewall.'''
-        for release in self.versions:
-            self._download_release(release)
-
-
     def _download_release(self, release):
         '''
         Download the specified release from the firewall and notate this in the database.
@@ -266,17 +256,15 @@ class FirewallScraper:
     def latest_download(self):
         '''Download the single latest release from the firewall.'''
         logging.info("Downloading the single latest release from the firewall.")
-        self._login()
-        self._find_update_page()
-        self._download_latest_release()
+        latest = max(self.versions, key=lambda x: x['date'])
+        self._download_release(latest)
 
 
     def all_available_download(self):
         '''Download all releases from the firewall.'''
         logging.info("Downloading all releases from the firewall.")
-        self._login()
-        self._find_update_page()
-        self._download_all_available_releases()
+        for release in self.versions:
+            self._download_release(release)
 
 
 
@@ -305,11 +293,12 @@ class ElasticFirewallScraper(FirewallScraper):
         connections.create_connection(host=elastic_ip)
 
 
-    def _download_all_new_releases(self):
+    def full_download(self):
         '''
         Download the specified release from the firewall if it isn't
         already registered in the database.
         '''
+        logging.info("Downloading all undownloaded releases from the firewall.")
         self.num_new_releases = 0
         for release in self.versions:
             version_search = (Search(index='update-details')
@@ -322,16 +311,16 @@ class ElasticFirewallScraper(FirewallScraper):
                 self._download_release(release)
 
 
-    def _download_latest_release(self):
+    def latest_download(self):
         '''Download the page source of only the latest release notes.'''
         self.num_new_releases = 0
-        super(ElasticFirewallScraper, self)._download_latest_release()
+        super(ElasticFirewallScraper, self).latest_download()
 
 
-    def _download_all_available_releases(self):
+    def all_available_download(self):
         '''Download the page source for all releases still on the firewall.'''
         self.num_new_releases = 0
-        super(ElasticFirewallScraper, self)._download_all_available_releases()
+        super(ElasticFirewallScraper, self).all_available_download()
 
 
     def _download_release(self, release):
@@ -349,11 +338,3 @@ class ElasticFirewallScraper(FirewallScraper):
         version_doc.save()
 
         self.num_new_releases += 1
-
-
-    def full_download(self):
-        '''Download any new releases from the firewall.'''
-        logging.info("Downloading all undownloaded releases from the firewall.")
-        self._login()
-        self._find_update_page()
-        self._download_all_new_releases()
