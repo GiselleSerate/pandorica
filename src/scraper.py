@@ -90,7 +90,9 @@ class VersionDocument(DocType):
 
 
 class FirewallScraper:
-    '''A web scraping utility that downloads release notes from a firewall.
+    '''
+    A web scraping utility that downloads release notes from a firewall.
+    Does NOT use elasticsearch.
 
     Non-keyword arguments:
     ip -- the IP of the firewall to scrape
@@ -99,13 +101,12 @@ class FirewallScraper:
     chrome_driver -- the name of the Chrome driver to use
     binary_location -- the path to the Chrome binary
     download_dir -- where to download the notes to
-    elastic_ip -- the IP of the database
 
     '''
     def __init__(self, ip, username, password,
                  chrome_driver='chromedriver',
                  binary_location='/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
-                 download_dir='contentpacks', elastic_ip='localhost'):
+                 download_dir='contentpacks'):
         # Set up session details
         self._ip = ip
         self._username = username
@@ -121,9 +122,7 @@ class FirewallScraper:
 
         # Init details
         self._download_dir = download_dir
-        self._versions = []
-        connections.create_connection(host=elastic_ip)
-        self.num_new_releases = 0
+        self.versions = []
 
 
     def __del__(self):
@@ -136,7 +135,7 @@ class FirewallScraper:
         self._driver.get(f'https://{self._ip}')
 
         # Fill login form and submit.
-        user_box = self._driver.find_element_by_id('user') # TODO maybe check this lol idk
+        user_box = self._driver.find_element_by_id('user')
         pwd_box = self._driver.find_element_by_id('passwd')
         user_box.clear()
         user_box.send_keys(self._username)
@@ -220,7 +219,7 @@ class FirewallScraper:
 
         av_table = self._driver.find_element_by_xpath("//div[contains (@id, '-gp-type-anti-virus-bd')]") #'ext-gen468-gp-type-anti-virus-bd')
         av_children = av_table.find_elements_by_xpath('*')
-        self._versions = []
+        self.versions = []
         # Iterate all versions
         for child in av_children:
             source = child.get_attribute('innerHTML')
@@ -235,40 +234,22 @@ class FirewallScraper:
             new_ver['link'] = re.search(r'https://downloads\.paloaltonetworks\.com/'
                                         r'virus/AntiVirusExternal-[0-9]*\.html'
                                         r'\?__gda__=[0-9]*_[a-z0-9]*', source).group(0)
-            self._versions.append(new_ver)
-        logging.debug(f"Discovered versions {self._versions}.")
+            self.versions.append(new_ver)
+        logging.debug(f"Discovered versions {self.versions}.")
 
 
     def _download_latest_release(self):
         '''Download the page source of only the latest release notes.'''
         # Get the absolute latest release notes
-        self.num_new_releases = 0
-        latest = max(self._versions, key=lambda x: x['date'])
+        latest = max(self.versions, key=lambda x: x['date'])
         self._download_release(latest)
 
 
     def _download_all_available_releases(self):
         '''Download the page source for all releases still on the firewall.'''
-        self.num_new_releases = 0
-        for release in self._versions:
+        for release in self.versions:
             self._download_release(release)
 
-
-    def _download_all_new_releases(self):
-        '''
-        Download the specified release from the firewall if it isn't
-        already registered in the database.
-        '''
-        self.num_new_releases = 0
-        for release in self._versions:
-            version_search = (Search(index='update-details')
-                              .query('match', version__keyword=release['version']))
-            version_search.execute()
-            downloaded = False
-            for hit in version_search:
-                downloaded = True
-            if not downloaded:
-                self._download_release(release)
 
     def _download_release(self, release):
         '''
@@ -281,6 +262,84 @@ class FirewallScraper:
         with open(filename, 'w') as file:
             file.write(self._driver.page_source)
 
+
+    def latest_download(self):
+        '''Download the single latest release from the firewall.'''
+        logging.info("Downloading the single latest release from the firewall.")
+        self._login()
+        self._find_update_page()
+        self._download_latest_release()
+
+
+    def all_available_download(self):
+        '''Download all releases from the firewall.'''
+        logging.info("Downloading all releases from the firewall.")
+        self._login()
+        self._find_update_page()
+        self._download_all_available_releases()
+
+
+
+class ElasticFirewallScraper(FirewallScraper):
+    '''
+    A web scraping utility that downloads release notes from a firewall
+    and writes this status to Elasticsearch. Allows downloading of only new releases.
+
+    Non-keyword arguments:
+    ip -- the IP of the firewall to scrape
+    username -- the firewall username
+    password -- the firewall password
+    chrome_driver -- the name of the Chrome driver to use
+    binary_location -- the path to the Chrome binary
+    download_dir -- where to download the notes to
+    elastic_ip -- the IP of the database
+
+    '''
+    def __init__(self, ip, username, password,
+                 chrome_driver='chromedriver',
+                 binary_location='/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
+                 download_dir='contentpacks', elastic_ip='localhost'):
+        super(ElasticFirewallScraper, self).__init__(ip, username, password, chrome_driver,
+                                                     binary_location, download_dir)
+        self.num_new_releases = 0
+        connections.create_connection(host=elastic_ip)
+
+
+    def _download_all_new_releases(self):
+        '''
+        Download the specified release from the firewall if it isn't
+        already registered in the database.
+        '''
+        self.num_new_releases = 0
+        for release in self.versions:
+            version_search = (Search(index='update-details')
+                              .query('match', version__keyword=release['version']))
+            version_search.execute()
+            downloaded = False
+            for _ in version_search:
+                downloaded = True
+            if not downloaded:
+                self._download_release(release)
+
+
+    def _download_latest_release(self):
+        '''Download the page source of only the latest release notes.'''
+        self.num_new_releases = 0
+        super(ElasticFirewallScraper, self)._download_latest_release()
+
+
+    def _download_all_available_releases(self):
+        '''Download the page source for all releases still on the firewall.'''
+        self.num_new_releases = 0
+        super(ElasticFirewallScraper, self)._download_all_available_releases()
+
+
+    def _download_release(self, release):
+        '''
+        Download the specified release from the firewall and notate this in the database.
+        '''
+        super(ElasticFirewallScraper, self)._download_release(release)
+
         # Write version and date to elasticsearch
         version_doc = VersionDocument(meta={'id':release['version']})
         version_doc.shortversion = release['version'].split('-')[0]
@@ -290,14 +349,6 @@ class FirewallScraper:
         version_doc.save()
 
         self.num_new_releases += 1
-
-
-    def latest_download(self):
-        '''Download the single latest release from the firewall.'''
-        logging.info("Downloading the single latest release from the firewall.")
-        self._login()
-        self._find_update_page()
-        self._download_latest_release()
 
 
     def full_download(self):
