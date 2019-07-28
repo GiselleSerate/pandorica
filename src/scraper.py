@@ -17,7 +17,7 @@
 '''
 Palo Alto Networks scraper.py
 
-Downloads the latest release notes off a PANW firewall.
+Downloads the latest release notes off the engtools server.
 
 Don't run this file independently; intended as an include. Make sure to configure your .panrc.
 
@@ -32,14 +32,8 @@ import re
 from time import sleep
 
 from elasticsearch_dsl import connections, Date, DocType, Integer, Keyword, Search, Text
-from selenium import webdriver
-from selenium.common.exceptions import (ElementClickInterceptedException, NoAlertPresentException,
-                                        TimeoutException, UnexpectedAlertPresentException, WebDriverException)
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
+from urllib.request import urlretrieve
+from urllib.error import HTTPError
 
 
 
@@ -89,252 +83,84 @@ class VersionDocument(DocType):
 
 
 
-class FirewallScraper:
+class ElasticEngToolsDownloader():
     '''
-    A web scraping utility that downloads release notes from a firewall.
-    Does NOT use elasticsearch.
+    A utility that downloads release notes from the engineering tools server
+    and writes this status to Elasticsearch.
 
     Non-keyword arguments:
-    ip -- the IP of the firewall to scrape
-    username -- the firewall username
-    password -- the firewall password
-    chrome_driver -- the name of the Chrome driver to use
-    binary_location -- the path to the Chrome binary
-    download_dir -- where to download the notes to
-
-    '''
-    def __init__(self, ip, username, password,
-                 chrome_driver='chromedriver',
-                 binary_location='/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
-                 download_dir='contentpacks'):
-        # Set up session details
-        self._ip = ip
-        self._username = username
-        self._password = password
-
-        # Set up driver
-        chrome_options = Options()
-        chrome_options.binary_location = binary_location
-        chrome_options.add_argument('--no-sandbox')
-        chrome_options.add_argument('--disable-dev-shm-usage')
-        self._driver = webdriver.Chrome(executable_path=os.path.abspath(chrome_driver),
-                                        options=chrome_options)
-
-        # Init details
-        self._download_dir = download_dir
-        self.versions = []
-
-        self._login()
-        self._find_update_page()
-
-
-    def __del__(self):
-        self._driver.close()
-
-
-    def _login(self):
-        '''Log into firewall.'''
-        # Load firewall login interface.
-        self._driver.get(f'https://{self._ip}')
-
-        # Fill login form and submit.
-        user_box = self._driver.find_element_by_id('user')
-        pwd_box = self._driver.find_element_by_id('passwd')
-        user_box.clear()
-        user_box.send_keys(self._username)
-        pwd_box.clear()
-        pwd_box.send_keys(self._password)
-        pwd_box.send_keys(Keys.RETURN)
-
-        timeout = 10
-
-        # If the default creds box pops up, handle it.
-        while True:
-            timeout -= 1
-            try:
-                # Handle alert if we expect it to be there.
-                if(self._username == 'admin' and self._password == 'admin'):
-                    alert_box = self._driver.switch_to.alert
-                    alert_box.accept()
-                return
-            except NoAlertPresentException:
-                # We expect an alert, but haven't seen one yet.
-                if timeout < 1:
-                    return
-                try:
-                    # Firewall is not warning us about default creds, but might in a bit.
-                    sleep(1)
-                except UnexpectedAlertPresentException:
-                    # Alert happened while we were sleeping; handle it.
-                    alert_box = self._driver.switch_to.alert
-                    alert_box.accept()
-                    return
-
-
-    def _find_update_page(self): # TODO: Sometimes we get stuck somewhere in this function. Fix it.
-        '''Navigate to get the notes link and details.'''
-        self._driver.get(f'https://{self._ip}')
-
-        # Wait for page to load.
-        timeout = 500
-        try:
-            device_tab_present = EC.presence_of_element_located((By.ID, 'device'))
-            WebDriverWait(self._driver, timeout).until(device_tab_present)
-        except TimeoutException:
-            logging.error("Timed out waiting for post-login page to load.")
-            raise TimeoutException
-
-        # Go to device tab.
-        device_tab = self._driver.find_element_by_id('device')
-        device_tab.click()
-
-        # Go to Dynamic Updates.
-        dynamic_updates = self._driver.find_element_by_css_selector("div[ext\\3Atree-node-id='device/dynamic-updates']")
-        dynamic_updates.click()
-
-        # Get latest updates.
-        check_now = self._driver.find_element_by_css_selector("table[itemid='Device/Dynamic Updates-Check Now']")
-        self._driver.execute_script("arguments[0].scrollIntoView(true)", check_now)
-
-        # Refresh update table
-        while True:
-            # Click as soon as the element is in view.
-            while True:
-                try:
-                    check_now.click()
-                    break
-                except ElementClickInterceptedException:
-                    sleep(1)
-                except WebDriverException: # Alternate exception for Chromium in Docker
-                    sleep(1)
-
-            # Wait for updates to load in (otherwise we will get the old updates).
-            sleep(10)
-
-            # Wait for page to load.
-            timeout = 30
-            try:
-                av_table_present = EC.presence_of_element_located((By.XPATH, "//div[contains (@id, '-gp-type-anti-virus-bd')]"))
-                WebDriverWait(self._driver, timeout).until(av_table_present)
-                break
-            except TimeoutException:
-                logging.warning('Timed out waiting for updates to load. Refresh again.')
-
-        av_table = self._driver.find_element_by_xpath("//div[contains (@id, '-gp-type-anti-virus-bd')]") #'ext-gen468-gp-type-anti-virus-bd')
-        av_children = av_table.find_elements_by_xpath('*')
-        self.versions = []
-        # Iterate all versions
-        for child in av_children:
-            source = child.get_attribute('innerHTML')
-            # Iterate details of each version
-            # Date should be formatted like 2019/06/14 04:02:07 PDT.
-            date = re.search(r'[0-9]{4}\/[0-9]{2}\/[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} PDT',
-                             source).group(0)
-            new_ver = {}
-            new_ver['date'] = date
-            # Version should be formatted like 3009-3519.
-            new_ver['version'] = re.search(r'[0-9]{4}-[0-9]{4}', source).group(0)
-            new_ver['link'] = re.search(r'https://downloads\.paloaltonetworks\.com/'
-                                        r'virus/AntiVirusExternal-[0-9]*\.html'
-                                        r'\?__gda__=[0-9]*_[a-z0-9]*', source).group(0)
-            self.versions.append(new_ver)
-        logging.debug(f"Discovered versions {self.versions}.")
-
-
-    def _download_release(self, release):
-        '''
-        Download the specified release from the firewall and notate this in the database.
-        '''
-        logging.info(f"Downloading {release['version']} from firewall.")
-        os.chdir(self._download_dir)
-        self._driver.get(release['link'])
-        filename = f"Updates_{release['version']}.html"
-        with open(filename, 'w') as file:
-            file.write(self._driver.page_source)
-
-
-    def latest_download(self):
-        '''Download the single latest release from the firewall.'''
-        logging.info("Downloading the single latest release from the firewall.")
-        latest = max(self.versions, key=lambda x: x['date'])
-        self._download_release(latest)
-
-
-    def all_available_download(self):
-        '''Download all releases from the firewall.'''
-        logging.info("Downloading all releases from the firewall.")
-        for release in self.versions:
-            self._download_release(release)
-
-
-
-class ElasticFirewallScraper(FirewallScraper):
-    '''
-    A web scraping utility that downloads release notes from a firewall
-    and writes this status to Elasticsearch. Allows downloading of only new releases.
-
-    Non-keyword arguments:
-    ip -- the IP of the firewall to scrape
-    username -- the firewall username
-    password -- the firewall password
-    chrome_driver -- the name of the Chrome driver to use
-    binary_location -- the path to the Chrome binary
     download_dir -- where to download the notes to
     elastic_ip -- the IP of the database
+    version_override -- optional argument to specify the VERSION YOU WANT TO DOWNLOAD. Allows you
+        to start downloading from a version besides the latest one from Elasticsearch; useful if
+        Elastic has no version in it
+    date_override -- optional argument used with version_override to set the date of the version
+        specified; you need to set this correctly, or all future dates written to Elasticsearch
+        will be wrong
 
     '''
-    def __init__(self, ip, username, password,
-                 chrome_driver='chromedriver',
-                 binary_location='/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
-                 download_dir='contentpacks', elastic_ip='localhost'):
-        super(ElasticFirewallScraper, self).__init__(ip, username, password, chrome_driver,
-                                                     binary_location, download_dir)
+    def __init__(self, download_dir='contentpacks', elastic_ip='localhost',
+                 version_override=None, date_override=None):
+        self._download_dir = download_dir
+
         self.num_new_releases = 0
         connections.create_connection(host=elastic_ip)
+
+        if version_override is None and date_override is None:
+            # No overrides; determine the latest release from Elastic
+            version_search = Search(index='update-details').sort('-version.keyword')
+            version_search = version_search[:1]
+            for hit in version_search:
+                self._last_version = hit.version
+                self._last_date = hit.date
+        else:
+            if date_override is None:
+                raise ValueError("date_override must be a valid date if you want to override the version.")
+            # TODO okay make sure the date is a date yes
+            # TODO also make sure the version is a version maybe, maybe you should exit
+            # TODO but like if they left it as none they probably mean to go ahead
 
 
     def full_download(self):
         '''
-        Download the specified release from the firewall if it isn't
-        already registered in the database.
+        Download releases past what we have already notated in Elasticsearch
+        from the engtools server.
         '''
-        logging.info("Downloading all undownloaded releases from the firewall.")
-        self.num_new_releases = 0
-        for release in self.versions:
-            version_search = (Search(index='update-details')
-                              .query('match', version__keyword=release['version']))
-            version_search.execute()
-            downloaded = False
-            for _ in version_search:
-                downloaded = True
-            if not downloaded:
-                self._download_release(release)
+        logging.info("Downloading new releases from the engtools server.")
+        while self._download_next_release():
+            logging.info(f"Downloaded version {self._last_version}.")
+
+        logging.info("Downloaded all new releases.")
 
 
-    def latest_download(self):
-        '''Download the page source of only the latest release notes.'''
-        self.num_new_releases = 0
-        super(ElasticFirewallScraper, self).latest_download()
-
-
-    def all_available_download(self):
-        '''Download the page source for all releases still on the firewall.'''
-        self.num_new_releases = 0
-        super(ElasticFirewallScraper, self).all_available_download()
-
-
-    def _download_release(self, release):
+    def _download_next_release(self):
         '''
-        Download the specified release from the firewall and notate this in the database.
+        Try to download the next release from the engtools server and notate this in the database.
         '''
-        super(ElasticFirewallScraper, self)._download_release(release)
+        # Increment the version to see if this version has been released yet
+        download_version = '-'.join([str(int(num) + 1) for num in self._last_version.split('-')])
 
-        # Write version and date to elasticsearch
-        version_doc = VersionDocument(meta={'id':release['version']})
-        version_doc.shortversion = release['version'].split('-')[0]
-        version_doc.version = release['version']
-        version_doc.date = release['date']
+        # Try to download these release notes.
+        try:
+            urlretrieve('https://i.ytimg.com/vi/Lv4SQy_9VLI/maxresdefault.jpg',
+                        f"{self._download_dir}/Updates_{download_version}.html")
+        except HTTPError as e:
+            # If we 404, dip early; this means we don't have the new updates
+            # (and is expected behavior).
+            if e.code == 404:
+                return False
+            # If it's not a 404, something bad is probably going on. Fail out.
+            logging.error(f"Unexpected HTTPError when getting version {download_version}.")
+            raise e
+
+        # Write version and date to Elasticsearch.
+        version_doc = VersionDocument(meta={'id':download_version})
+        version_doc.shortversion = download_version.split('-')[0]
+        version_doc.version = download_version
+        # version_doc.date = # TODO: Ah. Um. Yeah.
         version_doc.status = DocStatus.DOWNLOADED.value
         version_doc.save()
 
         self.num_new_releases += 1
+        self._last_version = download_version
+        return True
