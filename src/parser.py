@@ -34,6 +34,7 @@ import os
 from bs4 import BeautifulSoup
 from elasticsearch.exceptions import ConflictError
 from elasticsearch_dsl import connections, Index, Search, UpdateByQuery
+import requests
 
 from domain_docs import RetryException, MaintenanceException, DomainDocument
 from domain_processor import process_domains
@@ -281,8 +282,23 @@ def get_unanalyzed_version_details():
     return ret_list
 
 
+def wait_for_elastic(ip):
+    '''Wait for Elastic to be up.'''
+    logging.info("Waiting for Elasticsearch.")
+    while True:
+        try:
+            requests.get(f"http://{ip}:9200")
+            break
+        except requests.exceptions.ConnectionError:
+            pass
+    logging.info("Finished waiting for Elasticsearch.")
+
+
 if __name__ == '__main__':
-    connections.create_connection(host='localhost')
+    connections.create_connection(host=os.getenv('ELASTIC_IP'))
+
+    wait_for_elastic(os.getenv('ELASTIC_IP'))
+    exit()
 
     # Download latest release notes.
     scraper = FirewallScraper(ip=os.getenv('FW_IP'), username=os.getenv('FW_USERNAME'),

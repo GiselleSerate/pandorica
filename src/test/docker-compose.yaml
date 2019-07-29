@@ -1,0 +1,21 @@
+---
+version: '3'
+services:
+
+  elk:
+    image: sebp/elk
+    container_name: testelastic_con
+    restart: always
+    ports: ['9200:9200', '5601:5601']
+    networks: ['pandorica-net']
+
+  pandorica:
+    build: ../..
+    container_name: testpandorica_con
+    volumes:
+      - ~/.dockerrc:/root/.panrc
+    ports: ['5902:5900']
+    networks: ['pandorica-net']
+    depends_on: ['elk']
+
+networks: {pandorica-net: {}}

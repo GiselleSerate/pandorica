@@ -6,3 +6,4 @@ cookies.txt
 files
 vanilladriver
 manual_edit.py
+*.egg*
