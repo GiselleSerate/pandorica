@@ -35,6 +35,8 @@ from elasticsearch_dsl import connections, Date, DocType, Integer, Keyword, Sear
 from urllib.request import urlretrieve
 from urllib.error import HTTPError
 
+from src.lib.dateutils import DateString
+
 
 
 @unique
@@ -91,12 +93,13 @@ class ElasticEngToolsDownloader():
     Non-keyword arguments:
     download_dir -- where to download the notes to
     elastic_ip -- the IP of the database
-    version_override -- optional argument to specify the VERSION YOU WANT TO DOWNLOAD. Allows you
-        to start downloading from a version besides the latest one from Elasticsearch; useful if
-        Elastic has no version in it
+    version_override -- optional argument to specify the version BEFORE the one you want to
+        download. Allows you to start downloading from a version besides the latest one from
+        Elasticsearch; useful if Elastic has no version in it
     date_override -- optional argument used with version_override to set the date of the version
-        specified; you need to set this correctly, or all future dates written to Elasticsearch
-        will be wrong
+        specified (the version BEFORE the one you want to download); you need to set this
+        correctly, or all future dates written to Elasticsearch will be wrong. Dates accepted in
+        formats like 2019-06-22T04:00:23-07:00
 
     '''
     def __init__(self, download_dir='contentpacks', elastic_ip='localhost',
@@ -112,13 +115,11 @@ class ElasticEngToolsDownloader():
             version_search = version_search[:1]
             for hit in version_search:
                 self._last_version = hit.version
-                self._last_date = hit.date
+                self._last_date = DateString(hit.date)
         else:
-            if date_override is None:
-                raise ValueError("date_override must be a valid date if you want to override the version.")
-            # TODO okay make sure the date is a date yes
-            # TODO also make sure the version is a version maybe, maybe you should exit
-            # TODO but like if they left it as none they probably mean to go ahead
+            # Overrides; assume that version/date are okay for now; problems will get caught later
+            self._last_version = version_override
+            self._last_date = DateString(date_override)
 
 
     def full_download(self):
@@ -137,7 +138,7 @@ class ElasticEngToolsDownloader():
         '''
         Try to download the next release from the engtools server and notate this in the database.
         '''
-        # Increment the version to see if this version has been released yet
+        # Increment the version and date to see if this version has been released yet
         download_version = '-'.join([str(int(num) + 1) for num in self._last_version.split('-')])
 
         # Try to download these release notes.
@@ -157,10 +158,11 @@ class ElasticEngToolsDownloader():
         version_doc = VersionDocument(meta={'id':download_version})
         version_doc.shortversion = download_version.split('-')[0]
         version_doc.version = download_version
-        # version_doc.date = # TODO: Ah. Um. Yeah.
+        version_doc.date = self._last_date.get_tomorrow_string()
         version_doc.status = DocStatus.DOWNLOADED.value
         version_doc.save()
 
         self.num_new_releases += 1
         self._last_version = download_version
+        self._last_date.change_date(version_doc.date)
         return True
