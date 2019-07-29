@@ -27,6 +27,7 @@ Use at your own risk.
 '''
 
 import logging
+from logging.config import dictConfig
 import os
 from time import sleep
 
@@ -34,13 +35,13 @@ from dotenv import load_dotenv
 from elasticsearch import Elasticsearch
 from elasticsearch_dsl import connections, Search
 
-import parser
+from parser import wait_for_elastic, try_parse
 from domain_processor import process_domains
 from scraper import DocStatus, VersionDocument
 from testcases import ParseTest
 
 
-def test_autofocus(parse_test):
+def autofocus(parse_test):
     # Assume that we have already parsed and have a good database.
     fields = ['tag_group', 'public_tag_name', 'tag_class', 'description', 'tag']
     # Try processing 10 times. That's probably enough.
@@ -70,12 +71,41 @@ def test_autofocus(parse_test):
                                                                f"of domains, not {parse_test.percent_processed*100}%.")
 
 
-if __name__ == '__main__':
+
+def test_all():
+    home = os.getenv('HOME')
+    dot = './'
+    print(f"home is {home}")
+    print(f"dot is {dot}")
+    env_path = os.path.join(dot, 'src', 'lib', '.defaultrc')
+    load_dotenv(dotenv_path=env_path, verbose=True)
+    env_path = os.path.join(home, '.panrc')
+    load_dotenv(dotenv_path=env_path, verbose=True, override=True)
+    env_path = os.path.join(dot, 'src', 'test', '.testrc')
+    load_dotenv(dotenv_path=env_path, verbose=True, override=True)
+
+    dictConfig({
+        'version': 1,
+        'formatters': {'default': {
+            'format': '[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
+        }},
+        'handlers': {'wsgi': {
+            'class': 'logging.StreamHandler',
+            'stream': 'ext://sys.stdout',
+            'formatter': 'default'
+        }},
+        'root': {
+            'level': os.getenv('LOGGING_LEVEL'),
+            'handlers': ['wsgi']
+        }
+    })
+
     # Initialize test settings.
     parse_test = ParseTest()
 
     # Set up connection.
-    connections.create_connection(host=f"localhost")
+    connections.create_connection(host=os.getenv('ELASTIC_IP'))
+    wait_for_elastic(os.getenv('ELASTIC_IP'))
 
     # Set up update details so try_parse can verify it.
     version_doc = VersionDocument(meta={'id':parse_test.version})
@@ -106,7 +136,7 @@ if __name__ == '__main__':
 
     # Actually run parse.
     logging.info(f"Parsing version {parse_test.version} from {parse_test.version_date}")
-    parser.try_parse(path=f"{static_dir}/Updates_{parse_test.version}.html",
+    try_parse(path=f"{static_dir}/Updates_{parse_test.version}.html",
                      version=parse_test.version, date=parse_test.version_date)
 
     # Now check to see if some representative domains are in the database, with fields as expected.
@@ -140,4 +170,8 @@ if __name__ == '__main__':
         assert hit['status'] == DocStatus.PARSED.value
 
     # Test autofocus query code
-    test_autofocus(parse_test)
+    autofocus(parse_test)
+
+
+if __name__ == '__main__':
+    test_all()

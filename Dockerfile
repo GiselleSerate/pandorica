@@ -1,5 +1,6 @@
 # Only for testing. Don't use for actual deployment, because some of these things rely on things in the test environment. I'm not going to type out an essay in this line about how I know this is bad. Roll with it for now.
-FROM ubuntu:bionic
+# FROM ubuntu:bionic
+FROM python:3.6.8-alpine3.8
 
 LABEL description="Pandorica"
 LABEL version="0.1"
@@ -13,28 +14,20 @@ LABEL maintainer="sp-solutions@paloaltonetworks.com"
 #   && rm -r docker docker-17.04.0-ce.tgz
 
 WORKDIR /app
+COPY src /app/src
+
 ADD requirements.txt /app/requirements.txt
 
-SHELL ["/bin/bash", "-c"]
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y install --no-upgrade software-properties-common build-essential python-dev python-setuptools python3-pip python3.7-venv wget unzip netcat docker docker.io
+# SHELL ["/bin/bash", "-c"]
 
 # Set up Python virtual env
-RUN ["python3.7", "-m", "venv", "/root/.env"]
+RUN ["python", "-m", "venv", "/root/.env"]
 RUN ["/root/.env/bin/pip", "install", "--upgrade", "pip"]
 RUN ["/root/.env/bin/pip", "install", "-r", "requirements.txt"]
-
-COPY src /app/src
-COPY test.sh /app/test.sh
+RUN ["/root/.env/bin/pip", "install", "-e", "src"]
 
 EXPOSE 80 5900
 
-RUN ["/app/test.sh"]
-
-RUN ["pwd"]
-
-# RUN ["chmod", "+x", "/root/.env/bin/activate"]
-# RUN ["/root/.env/bin/activate"]
-RUN ["/root/.env/bin/python", "-m", "pytest", "-v"]
-
-# RUN ["/root/.env/bin/python", "/app/src/parser.py"]
-# TODO: OH NO WHERES YOUR PANRC
+# RUN ["/root/.env/bin/python", "-m", "pytest", "-v"]
+# WORKDIR /app/src/test
+RUN ["/root/.env/bin/python", "src/test/test_parser.py"]

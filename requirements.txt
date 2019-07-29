@@ -17,7 +17,6 @@ importlib-metadata==0.18
 ipaddress==1.0.19
 itsdangerous==1.1.0
 Jinja2==2.10.1
-lxml==4.3.4
 MarkupSafe==1.1.1
 more-itertools==7.1.0
 oauth2client==4.1.3
