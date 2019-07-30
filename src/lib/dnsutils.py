@@ -38,9 +38,9 @@ def updateAfStats():
     # Just grab a tag that we know exists so we can get the rolling point total
     logging.debug(f"Query to update AF points totals (2 API-points)")
     returnData = getTagInfo("WildFireTest")
-    afInfo = returnData['bucket_info']
 
     try:
+        afInfo = returnData['bucket_info']
         logging.debug(f"Updating af-details with "
                          f"{afInfo['daily_points_remaining']} remaining points")
         # Update the af-details doc in the DB
