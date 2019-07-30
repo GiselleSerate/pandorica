@@ -6,16 +6,21 @@ LABEL version="0.1"
 LABEL maintainer="sp-solutions@paloaltonetworks.com"
 
 WORKDIR /app
-COPY src /app/src
-COPY .panrc /root/.panrc
-
-ADD requirements.txt /app/requirements.txt
 
 # Set up Python virtual env
 RUN ["python", "-m", "venv", "/root/.env"]
 RUN ["/root/.env/bin/pip", "install", "--upgrade", "pip"]
+
+# Copy + install requirements
+COPY requirements.txt /app/requirements.txt
 RUN ["/root/.env/bin/pip", "install", "-r", "requirements.txt"]
+
+# Copy + install src dir as editable
+COPY src /app/src
 RUN ["/root/.env/bin/pip", "install", "-e", "src"]
+
+# Put .panrc in ~
+COPY .panrc /root/.panrc
 
 EXPOSE 80 5900
 
