@@ -58,7 +58,7 @@ def getTagInfo(tagName):
     searchURL = os.getenv("AUTOFOCUS_TAG_URL") + f"{tagName}"
     headers = {"Content-Type": "application/json"}
     data = {"apiKey": os.getenv('AUTOFOCUS_API_KEY')}
-    logging.error(os.getenv('AUTOFOCUS_API_KEY'))
+    logging.error(f"Autofocus API key is: {os.getenv('AUTOFOCUS_API_KEY')}")
 
     # Query AF and get the tag info to be stored in our local ES cache
     logging.debug(f'Gathering tag info for {tagName} (2 API-points)')
