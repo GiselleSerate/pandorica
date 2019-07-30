@@ -100,7 +100,10 @@ def test_all():
     env_path = os.path.join(dot, 'src', 'lib', '.defaultrc')
     load_dotenv(dotenv_path=env_path, verbose=True)
     env_path = os.path.join(home, '.panrc')
-    load_dotenv(dotenv_path=env_path, verbose=True, override=True)
+    try:
+        load_dotenv(dotenv_path=env_path, verbose=True, override=True)
+    except Exception:
+        pass
     env_path = os.path.join(dot, 'src', 'test', '.testrc')
     load_dotenv(dotenv_path=env_path, verbose=True, override=True)
 

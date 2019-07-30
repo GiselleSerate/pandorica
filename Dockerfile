@@ -25,9 +25,6 @@ RUN ["/root/.env/bin/pip", "install", "-r", "requirements.txt"]
 COPY src /app/src
 RUN ["/root/.env/bin/pip", "install", "-e", "src"]
 
-# Put .panrc in ~
-COPY .panrc /root/.panrc
-
 EXPOSE 80 5900
 
 # Go directly to Python
