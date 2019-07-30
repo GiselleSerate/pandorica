@@ -7,6 +7,12 @@ LABEL maintainer="sp-solutions@paloaltonetworks.com"
 
 WORKDIR /app
 
+# Get curl for mappings
+RUN apk add curl
+
+# Move mappings install directory
+COPY install /app/install
+
 # Set up Python virtual env
 RUN ["python", "-m", "venv", "/root/.env"]
 RUN ["/root/.env/bin/pip", "install", "--upgrade", "pip"]
@@ -24,4 +30,5 @@ COPY .panrc /root/.panrc
 
 EXPOSE 80 5900
 
+# Go directly to Python
 CMD ["/root/.env/bin/python", "src/test/test_parser.py"]

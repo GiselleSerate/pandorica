@@ -34,11 +34,32 @@ from time import sleep
 from dotenv import load_dotenv
 from elasticsearch import Elasticsearch
 from elasticsearch_dsl import connections, Search
+import requests
 
 from domain_processor import process_domains
 from notes_parser import wait_for_elastic, try_parse
 from scraper import DocStatus, VersionDocument
 from testcases import ParseTest
+
+
+def setup_mappings(mappings_path, ip):
+    '''
+    Maps domain and tag caches. ELK must be up first.
+    '''
+    headers = {'Content-Type':'application/json'}
+    logging.info("Installing domain details mapping.")
+    contents = open(os.path.join(mappings_path, 'sfn-domain-details.json')).read()
+    r = requests.put(f'http://{ip}:9200/sfn-domain-details/', data=contents, headers=headers)
+    if r.status_code != 200 and r.error.type != "resource_already_exists_exception":
+        logging.warning("Unsuccessful write of domain details mapping.")
+        logging.warning(r.text)
+
+    logging.info("Installing tag details mapping.")
+    contents = open(os.path.join(mappings_path, 'sfn-tag-details.json')).read()
+    r = requests.put(f'http://{ip}:9200/sfn-tag-details/', data=contents, headers=headers)
+    if r.status_code != 200 and r.error.type != "resource_already_exists_exception":
+        logging.warning("Unsuccessful write of tag details mapping.")
+        logging.warning(r.text)
 
 
 def autofocus(parse_test):
@@ -69,7 +90,6 @@ def autofocus(parse_test):
     logging.info(f"Processed {percent_processed*100}% of domains.")
     assert percent_processed >= parse_test.percent_processed, (f"Processed only {percent_processed*100}% "
                                                                f"of domains, not {parse_test.percent_processed*100}%.")
-
 
 
 def test_all():
@@ -104,6 +124,9 @@ def test_all():
     # Set up connection.
     connections.create_connection(host=os.getenv('ELASTIC_IP'))
     wait_for_elastic(os.getenv('ELASTIC_IP'))
+
+    mappings_path = os.path.join(dot, 'install', 'mappings')
+    setup_mappings(mappings_path, os.getenv('ELASTIC_IP'))
 
     # Set up update details so try_parse can verify it.
     version_doc = VersionDocument(meta={'id':parse_test.version})
