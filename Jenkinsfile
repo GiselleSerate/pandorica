@@ -5,7 +5,7 @@ pipeline {
             steps {
                 sh 'echo $PWD'
                 sh 'cd src/test'
-                sh 'docker-compose '
+                sh 'docker-compose up --build'
             }
         }
     }
