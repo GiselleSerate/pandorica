@@ -39,7 +39,7 @@ import requests
 
 from domain_docs import RetryException, MaintenanceException, DomainDocument
 from domain_processor import process_domains
-from scraper import DocStatus, ElasticFirewallScraper
+from scraper import DocStatus, ElasticEngToolsDownloader
 
 
 
@@ -301,12 +301,13 @@ if __name__ == '__main__':
     exit()
 
     # Download latest release notes.
-    scraper = ElasticFirewallScraper(ip=os.getenv('FW_IP'), username=os.getenv('FW_USERNAME'),
-                                     password=os.getenv('FW_PASSWORD'),
-                                     chrome_driver=os.getenv('DRIVER'),
-                                     binary_location=os.getenv('BINARY_LOCATION'),
-                                     download_dir=os.getenv('DOWNLOAD_DIR'),
-                                     elastic_ip=os.getenv('ELASTIC_IP'))
+    scraper = ElasticEngToolsDownloader(ip=os.getenv('FW_IP'), username=os.getenv('FW_USERNAME'),
+                                        password=os.getenv('FW_PASSWORD'),
+        #                                 chrome_driver=os.getenv('DRIVER'),
+        #                                 binary_location=os.getenv('BINARY_LOCATION'),
+                                        download_dir=os.getenv('DOWNLOAD_DIR'),
+                                        elastic_ip=os.getenv('ELASTIC_IP'))
+    exit()
     scraper.full_download()
 
     # Parse domains and write them to the database.

@@ -3,9 +3,7 @@ pipeline {
     stages {
         stage('Everything') { 
             steps {
-                sh 'echo $PWD'
-                sh 'cd src/test'
-                sh '/usr/local/bin/docker-compose up --build'
+                sh '/usr/local/bin/docker-compose up --build -f src/test/docker-compose.yml'
             }
         }
     }

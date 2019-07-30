@@ -34,9 +34,9 @@ from time import sleep
 from elasticsearch_dsl import connections, Date, DocType, Integer, Keyword, Search, Text
 from urllib.request import urlretrieve
 from urllib.error import HTTPError
-from pan.xapi import *
+from pan.xapi import PanXapi
 
-from src.lib.dateutils import DateString
+from lib.dateutils import DateString
 
 
 
@@ -103,11 +103,15 @@ class ElasticEngToolsDownloader():
         formats like 2019-06-22T04:00:23-07:00
 
     '''
-    def __init__(self, download_dir='contentpacks', elastic_ip='localhost',
+    def __init__(self, ip=None, username='admin', password='admin',
+                 download_dir='contentpacks', elastic_ip='localhost',
                  version_override=None, date_override=None):
         self._download_dir = download_dir
         self.num_new_releases = 0
-        connections.create_connection(host=elastic_ip)
+
+        self._ip = ip
+        self._username = username
+        self._password = password
 
         self._determine_new_release()
 
@@ -124,6 +128,8 @@ class ElasticEngToolsDownloader():
             self._last_date = DateString(date_override)
 
     def _determine_new_release(self):
+        api_instance = PanXapi(hostname=self._ip, api_username=self._username, api_password=self._password)
+        api_instance.op('show system info')
         exit()
 
 
