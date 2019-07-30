@@ -1,5 +1,4 @@
 .env
-*.html
 .DS_Store
 __pycache__
 cookies.txt
