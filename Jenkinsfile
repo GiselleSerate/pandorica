@@ -1,8 +1,8 @@
 pipeline {
     agent any
     environment {
-        AUTOFOCUS_API_KEY=credentials('AUTOFOCUS_API_KEY')
-        AUTOFOCUS_API_KEY=${AUTOFOCUS_API_KEY}
+        AUTOFOCUS_API_KEY_=credentials('AUTOFOCUS_API_KEY')
+        AUTOFOCUS_API_KEY=${AUTOFOCUS_API_KEY_}
     }
     stages {
         stage('Everything') { 
