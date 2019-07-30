@@ -1,28 +1,34 @@
-FROM dorowu/ubuntu-desktop-lxde-vnc:bionic
+# Only for testing. Don't use for actual deployment.
+FROM python:3.6.8-alpine3.8
 
 LABEL description="Pandorica"
 LABEL version="0.1"
 LABEL maintainer="sp-solutions@paloaltonetworks.com"
 
 WORKDIR /app
-ADD requirements.txt /app/requirements.txt
 
-SHELL ["/bin/bash", "-c"]
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y install --no-upgrade software-properties-common build-essential python-dev python-setuptools python3-pip python3.6-venv wget unzip
+# Get curl for mappings
+RUN apk add curl
+
+# Move mappings install directory
+COPY install /app/install
 
 # Set up Python virtual env
-RUN ["python3.6", "-m", "venv", "/root/.env"]
+RUN ["python", "-m", "venv", "/root/.env"]
 RUN ["/root/.env/bin/pip", "install", "--upgrade", "pip"]
+
+# Copy + install requirements
+COPY requirements.txt /app/requirements.txt
 RUN ["/root/.env/bin/pip", "install", "-r", "requirements.txt"]
 
-# Get driver
-RUN ["wget", "https://chromedriver.storage.googleapis.com/2.41/chromedriver_linux64.zip"]
-RUN ["unzip", "chromedriver_linux64.zip"]
-RUN ["mv", "chromedriver", "/usr/bin/chromedriver"]
-
-
+# Copy + install src dir as editable
 COPY src /app/src
+RUN ["/root/.env/bin/pip", "install", "-e", "src"]
+
+# Put .panrc in ~
+COPY .panrc /root/.panrc
 
 EXPOSE 80 5900
 
-# RUN ["/root/.env/bin/python", "/app/src/parser.py"]
+# Go directly to Python
+CMD ["/root/.env/bin/python", "src/test/test_parser.py"]

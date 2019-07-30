@@ -35,6 +35,7 @@ from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from elasticsearch.exceptions import ConflictError
 from elasticsearch_dsl import connections, Index, Search, UpdateByQuery
+import requests
 
 from domain_docs import RetryException, MaintenanceException, DomainDocument
 from domain_processor import process_domains
@@ -43,7 +44,7 @@ from scraper import DocStatus, ElasticFirewallScraper
 
 
 home = os.getenv('HOME')
-dot = os.getenv('PWD')
+dot = os.getcwd()
 env_path = os.path.join(dot, 'src', 'lib', '.defaultrc')
 load_dotenv(dotenv_path=env_path, verbose=True)
 env_path = os.path.join(home, '.panrc')
@@ -279,8 +280,25 @@ def get_unanalyzed_version_details():
     return ret_list
 
 
+def wait_for_elastic(ip):
+    '''Wait for Elastic to be up.'''
+    logging.info("Waiting for Elasticsearch.")
+    while True:
+        try:
+            response = requests.get(f"http://{ip}:9200")
+            logging.info(f"Elasticsearch responds with {response}")
+            if response.status_code == 200:
+                break
+        except requests.exceptions.ConnectionError:
+            pass
+    logging.info("Finished waiting for Elasticsearch.")
+
+
 if __name__ == '__main__':
     connections.create_connection(host=os.getenv('ELASTIC_IP'))
+
+    wait_for_elastic(os.getenv('ELASTIC_IP'))
+    exit()
 
     # Download latest release notes.
     scraper = ElasticFirewallScraper(ip=os.getenv('FW_IP'), username=os.getenv('FW_USERNAME'),

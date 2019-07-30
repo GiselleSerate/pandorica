@@ -1,8 +1,9 @@
 .env
-*.html
 .DS_Store
 __pycache__
 cookies.txt
 files
 vanilladriver
 manual_edit.py
+*.egg*
+.panrc

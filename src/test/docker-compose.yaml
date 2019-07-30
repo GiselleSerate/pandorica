@@ -1,0 +1,24 @@
+---
+version: '3'
+services:
+  
+  pandorica:
+    build: ../..
+    container_name: testpandorica_con
+    ports: ['5902:5900']
+    networks: ['pandorica-net']
+    depends_on: ['testelk']
+
+  testelk:
+    image: sebp/elk
+    container_name: testelastic_con
+    restart: always
+    ports: ['9200:9200', '5601:5601']
+    networks: ['pandorica-net']
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9200"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+networks: {pandorica-net: {}}

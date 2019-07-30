@@ -1,8 +1,5 @@
 class ParseTest():
     def __init__(self):
-        # Keep the static version notes here (path rel to home directory)
-        self.static_dir = 'static_notes'
-
         # Static version notes metadata
         self.version = '3026-3536'
         self.version_date = '2019-07-01T04:00:52-07:00'
