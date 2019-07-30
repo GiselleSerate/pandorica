@@ -92,7 +92,6 @@ DOMAIN_TAG_INFO_MAX_AGE=120
 CONFIDENCE_LEVELS={'15':90,'25':80,'40':70,'50':60,'60':50}
 
 # Where do we find AF?
-AUTOFOCUS_API_KEY=NOT-SET
 AUTOFOCUS_SEARCH_URL=https://autofocus.paloaltonetworks.com/api/v1.0/samples/search
 AUTOFOCUS_RESULTS_URL=https://autofocus.paloaltonetworks.com/api/v1.0/samples/results/
 AUTOFOCUS_TAG_URL=https://autofocus.paloaltonetworks.com/api/v1.0/tag/
