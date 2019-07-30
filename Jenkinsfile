@@ -7,7 +7,8 @@ pipeline {
     stages {
         stage('Everything') { 
             steps {
-                sh 'AUTOFOCUS_API_KEY=${AUTOFOCUS_API_KEY} /usr/local/bin/docker-compose --file src/test/docker-compose.yaml up --build'
+                sh 'export AUTOFOCUS_API_KEY=${AUTOFOCUS_API_KEY}'
+                sh '/usr/local/bin/docker-compose --file src/test/docker-compose.yaml up --build'
             }
         }
     }
