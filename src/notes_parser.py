@@ -288,7 +288,7 @@ def wait_for_elastic(ip):
     while True:
         try:
             response = requests.get(f"http://{ip}:9200")
-            logging.info(f"Response is {response}")
+            logging.info(f"Elasticsearch responds with {response}")
             if response.status_code == 200:
                 break
         except requests.exceptions.ConnectionError:
