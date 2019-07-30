@@ -35,8 +35,8 @@ from dotenv import load_dotenv
 from elasticsearch import Elasticsearch
 from elasticsearch_dsl import connections, Search
 
-from parser import wait_for_elastic, try_parse
 from domain_processor import process_domains
+from notes_parser import wait_for_elastic, try_parse
 from scraper import DocStatus, VersionDocument
 from testcases import ParseTest
 
@@ -74,9 +74,7 @@ def autofocus(parse_test):
 
 def test_all():
     home = os.getenv('HOME')
-    dot = './'
-    print(f"home is {home}")
-    print(f"dot is {dot}")
+    dot = os.getcwd()
     env_path = os.path.join(dot, 'src', 'lib', '.defaultrc')
     load_dotenv(dotenv_path=env_path, verbose=True)
     env_path = os.path.join(home, '.panrc')
@@ -131,8 +129,8 @@ def test_all():
 
 
     # Find the preloaded version notes.
-    home = os.getenv('HOME')
-    static_dir = os.path.join(home, parse_test.static_dir)
+    static_dir = os.path.join(dot, 'src', 'test')
+    print(static_dir)
 
     # Actually run parse.
     logging.info(f"Parsing version {parse_test.version} from {parse_test.version_date}")

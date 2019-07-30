@@ -7,3 +7,4 @@ files
 vanilladriver
 manual_edit.py
 *.egg*
+.panrc

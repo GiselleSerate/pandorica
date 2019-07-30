@@ -117,7 +117,7 @@ def process_domains():
 
     # Necessary if you don't run the parser first.
     # Establish database connection (port 9200 by default).
-    connections.create_connection(host='localhost')
+    # connections.create_connection(host=os.getenv('ELASTIC_IP'))
 
     # Search for non-processed and non-generic.
     new_nongeneric_search = (Search(index=f"content_*")

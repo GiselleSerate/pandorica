@@ -15,6 +15,7 @@ LABEL maintainer="sp-solutions@paloaltonetworks.com"
 
 WORKDIR /app
 COPY src /app/src
+COPY .panrc /root/.panrc
 
 ADD requirements.txt /app/requirements.txt
 
@@ -30,4 +31,4 @@ EXPOSE 80 5900
 
 # RUN ["/root/.env/bin/python", "-m", "pytest", "-v"]
 # WORKDIR /app/src/test
-RUN ["/root/.env/bin/python", "src/test/test_parser.py"]
+CMD ["/root/.env/bin/python", "src/test/test_parser.py"]

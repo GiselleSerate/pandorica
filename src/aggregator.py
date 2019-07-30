@@ -105,7 +105,7 @@ def date_difference(earlier, later):
 
 def aggregate_domains():
     '''Sum all domains over all indices.'''
-    connections.create_connection(host='localhost')
+    # connections.create_connection(host='localhost') # TODO
 
     handled = {}
 

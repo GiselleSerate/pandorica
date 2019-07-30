@@ -48,7 +48,7 @@ import os
 
 
 home = os.getenv('HOME')
-dot = os.getenv('PWD')
+dot = os.getcwd()
 env_path = os.path.join(dot, 'src', 'lib', '.defaultrc')
 load_dotenv(dotenv_path=env_path, verbose=True)
 env_path = os.path.join(home, '.panrc')
@@ -287,8 +287,10 @@ def wait_for_elastic(ip):
     logging.info("Waiting for Elasticsearch.")
     while True:
         try:
-            requests.get(f"http://{ip}:9200")
-            break
+            response = requests.get(f"http://{ip}:9200")
+            logging.info(f"Response is {response}")
+            if response.status_code == 200:
+                break
         except requests.exceptions.ConnectionError:
             pass
     logging.info("Finished waiting for Elasticsearch.")
