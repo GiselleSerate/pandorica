@@ -34,6 +34,7 @@ from time import sleep
 from elasticsearch_dsl import connections, Date, DocType, Integer, Keyword, Search, Text
 from urllib.request import urlretrieve
 from urllib.error import HTTPError
+from pan.xapi import *
 
 from src.lib.dateutils import DateString
 
@@ -105,9 +106,10 @@ class ElasticEngToolsDownloader():
     def __init__(self, download_dir='contentpacks', elastic_ip='localhost',
                  version_override=None, date_override=None):
         self._download_dir = download_dir
-
         self.num_new_releases = 0
         connections.create_connection(host=elastic_ip)
+
+        self._determine_new_release()
 
         if version_override is None and date_override is None:
             # No overrides; determine the latest release from Elastic
@@ -120,6 +122,9 @@ class ElasticEngToolsDownloader():
             # Overrides; assume that version/date are okay for now; problems will get caught later
             self._last_version = version_override
             self._last_date = DateString(date_override)
+
+    def _determine_new_release(self):
+        exit()
 
 
     def full_download(self):
