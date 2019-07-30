@@ -50,14 +50,16 @@ def setup_mappings(mappings_path, ip):
     logging.info("Installing domain details mapping.")
     contents = open(os.path.join(mappings_path, 'sfn-domain-details.json')).read()
     r = requests.put(f'http://{ip}:9200/sfn-domain-details/', data=contents, headers=headers)
-    if r.status_code != 200 and r.error.type != "resource_already_exists_exception":
+    # Unless accepted or already mapped
+    if r.status_code != 200 and r.status_code != 400:
         logging.warning("Unsuccessful write of domain details mapping.")
         logging.warning(r.text)
 
     logging.info("Installing tag details mapping.")
     contents = open(os.path.join(mappings_path, 'sfn-tag-details.json')).read()
     r = requests.put(f'http://{ip}:9200/sfn-tag-details/', data=contents, headers=headers)
-    if r.status_code != 200 and r.error.type != "resource_already_exists_exception":
+    # Unless accepted or already mapped
+    if r.status_code != 200 and r.status_code != 400:
         logging.warning("Unsuccessful write of tag details mapping.")
         logging.warning(r.text)
 

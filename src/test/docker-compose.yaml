@@ -10,17 +10,18 @@ services:
     depends_on: ['testelk']
 
   testelk:
-    image: sebp/elk
+    image: paloaltonetworks/pandorica_test_elk
     container_name: testelastic_con
     restart: always
     ports: ['9200:9200', '5601:5601']
     networks: ['pandorica-net']
-    transport.host: ['localhost']
-    network.host: ['0.0.0.0']
+    environment:
+      - network.host:0.0.0.0
+      - discovery.type:single-node
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9200"]
       interval: 30s
       timeout: 10s
       retries: 5
 
-networks: {pandorica-net: {}}
+networks: {pandorica-net: {}} 
