@@ -3,7 +3,7 @@ version: '3'
 services:
   
   pandorica:
-    build: ../..
+    image: pandorica:test
     container_name: testpandorica_con
     ports: ['5902:5900']
     networks: ['pandorica-net']
