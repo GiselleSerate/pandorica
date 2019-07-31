@@ -1,7 +1,7 @@
 pipeline {
     agent {
         docker {
-            image paloaltonetworks/pandorica_test_elk
+            image 'paloaltonetworks/pandorica_test_elk:latest'
             alwaysPull true
         }
     }
