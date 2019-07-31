@@ -179,7 +179,8 @@ def run_parser(path, version, date):
                 meta_search = (Search(index='update-details')
                                .query('match', version__keyword=version))
                 meta_search.execute()
-                complete = 0 # By default, assume incomplete
+                # By default, assume incomplete.
+                complete = 0
                 for hit in meta_search:
                     complete = hit.status >= DocStatus.PARSED.value
                 if complete:
@@ -297,16 +298,15 @@ def wait_for_elastic(ip):
 if __name__ == '__main__':
     connections.create_connection(host=os.getenv('ELASTIC_IP'))
 
-    wait_for_elastic(os.getenv('ELASTIC_IP'))
-    exit()
+    # wait_for_elastic(os.getenv('ELASTIC_IP'))
+    # exit()
 
     # Download latest release notes.
     scraper = ElasticEngToolsDownloader(ip=os.getenv('FW_IP'), username=os.getenv('FW_USERNAME'),
                                         password=os.getenv('FW_PASSWORD'),
         #                                 chrome_driver=os.getenv('DRIVER'),
         #                                 binary_location=os.getenv('BINARY_LOCATION'),
-                                        download_dir=os.getenv('DOWNLOAD_DIR'),
-                                        elastic_ip=os.getenv('ELASTIC_IP'))
+                                        download_dir=os.getenv('DOWNLOAD_DIR'))
     exit()
     scraper.full_download()
 

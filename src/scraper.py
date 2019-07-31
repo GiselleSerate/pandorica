@@ -27,10 +27,9 @@ Use at your own risk.
 
 from enum import IntEnum, unique
 import logging
-import os
-import re
 from time import sleep
 
+from bs4 import BeautifulSoup
 from elasticsearch_dsl import connections, Date, DocType, Integer, Keyword, Search, Text
 from urllib.request import urlretrieve
 from urllib.error import HTTPError
@@ -104,8 +103,7 @@ class ElasticEngToolsDownloader():
 
     '''
     def __init__(self, ip=None, username='admin', password='admin',
-                 download_dir='contentpacks', elastic_ip='localhost',
-                 version_override=None, date_override=None):
+                 download_dir='contentpacks'):
         self._download_dir = download_dir
         self.num_new_releases = 0
 
@@ -113,67 +111,68 @@ class ElasticEngToolsDownloader():
         self._username = username
         self._password = password
 
+        self.latest_version = None
+        self.latest_date = None
         self._determine_new_release()
 
-        if version_override is None and date_override is None:
-            # No overrides; determine the latest release from Elastic
-            version_search = Search(index='update-details').sort('-version.keyword')
-            version_search = version_search[:1]
-            for hit in version_search:
-                self._last_version = hit.version
-                self._last_date = DateString(hit.date)
-        else:
-            # Overrides; assume that version/date are okay for now; problems will get caught later
-            self._last_version = version_override
-            self._last_date = DateString(date_override)
 
     def _determine_new_release(self):
-        api_instance = PanXapi(hostname=self._ip, api_username=self._username, api_password=self._password)
-        api_instance.op('show system info')
-        exit()
+        api_instance = PanXapi(hostname=self._ip, api_username=self._username,
+                               api_password=self._password)
+        # Init status to nothing
+        api_instance.status = None
+        # Keep requesting until we get a successful response
+        while api_instance.status != 'success':
+            logging.info("Trying op command.")
+            api_instance.op('show system info', cmd_xml=True)
+            sleep(1)
+        logging.debug(f"XML is: {api_instance.xml_document}")
+        # Parse version and date out of document
+        soup = BeautifulSoup(api_instance.xml_document, features='html5lib')
+        version_el = soup.find('threat-version')
+        date_el = soup.find('threat-release-date')
+        self.latest_version = version_el.text
+        self.latest_date = date_el.text
+        logging.debug(f"Firewall says the latest version is {self.latest_version}, "
+                      f"released {self.latest_date}.")
 
 
-    def full_download(self):
+    def download_release(self):
         '''
-        Download releases past what we have already notated in Elasticsearch
-        from the engtools server.
+        Download the release from the engtools server and notate this in the database.
         '''
-        logging.info("Downloading new releases from the engtools server.")
-        while self._download_next_release():
-            logging.info(f"Downloaded version {self._last_version}.")
-
-        logging.info("Downloaded all new releases.")
-
-
-    def _download_next_release(self):
-        '''
-        Try to download the next release from the engtools server and notate this in the database.
-        '''
-        # Increment the version and date to see if this version has been released yet
-        download_version = '-'.join([str(int(num) + 1) for num in self._last_version.split('-')])
+        # First check if we have already downloaded the notes.
+        # meta_search = (Search(index='update-details')
+        #                .query('match', version__keyword=self.latest_version))
+        # if meta_search.count() > 0:
+        #     logging.info(f"{self.latest_version} already downloaded, not redownloading.")
+        #     return
 
         # Try to download these release notes.
-        try:
-            urlretrieve('https://i.ytimg.com/vi/Lv4SQy_9VLI/maxresdefault.jpg',
-                        f"{self._download_dir}/Updates_{download_version}.html")
-        except HTTPError as e:
-            # If we 404, dip early; this means we don't have the new updates
-            # (and is expected behavior).
-            if e.code == 404:
-                return False
-            # If it's not a 404, something bad is probably going on. Fail out.
-            logging.error(f"Unexpected HTTPError when getting version {download_version}.")
-            raise e
+        tries = 5
+        while True:
+            try:
+                urlretrieve(f"http://10.105.203.52/pub/repository/av/external/releasenotes/"
+                            f"AntiVirusExternal-{self.latest_version.split('-')[0]}.html",
+                            f"{self._download_dir}/Updates_{self.latest_version}.html")
+                break
+            except HTTPError as e:
+                # Log and wait a bit; maybe the error will go away on retry.
+                logging.warning(f"Unexpected HTTPError {e.code}"
+                                f"when getting version {self.latest_version}.")
+                logging.debug(e)
+                tries -= 1
+                # We're done waiting; fail for real.
+                if tries == 0:
+                    logging.error(f"Hit more than {tries} HTTPErrors; giving up.")
+                    raise e
+                sleep(1)
 
         # Write version and date to Elasticsearch.
-        version_doc = VersionDocument(meta={'id':download_version})
-        version_doc.shortversion = download_version.split('-')[0]
-        version_doc.version = download_version
-        version_doc.date = self._last_date.get_tomorrow_string()
-        version_doc.status = DocStatus.DOWNLOADED.value
-        version_doc.save()
-
-        self.num_new_releases += 1
-        self._last_version = download_version
-        self._last_date.change_date(version_doc.date)
-        return True
+        # version_doc = VersionDocument(meta={'id':self.latest_version})
+        # version_doc.shortversion = self.latest_version.split('-')[0]
+        # version_doc.version = self.latest_version
+        # version_doc.date = self.latest_date
+        # version_doc.status = DocStatus.DOWNLOADED.value
+        # version_doc.save()
+        logging.info(f"Finished downloading {self.latest_version}.")
