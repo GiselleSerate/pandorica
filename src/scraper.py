@@ -150,16 +150,12 @@ class ElasticEngToolsDownloader():
         #     return
 
         # Try to download these release notes.
-        logging.error("HIT FUNC")
         tries = 5
-        # TODO this is a Hard Code
-        self.latest_version = '3030-blah'
         while True:
             try:
                 urlretrieve(f"http://10.105.203.52/pub/repository/av/external/releasenotes/"
                             f"AntiVirusExternal-{self.latest_version.split('-')[0]}.html",
                             f"{self._download_dir}/Updates_{self.latest_version}.html")
-                logging.error("we did it reddit")
                 break
             except HTTPError as e:
                 # Log and wait a bit; maybe the error will go away on retry.
