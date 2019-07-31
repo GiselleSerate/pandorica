@@ -7,6 +7,7 @@ pipeline {
     stages {
         stage('Everything') { 
             steps {
+                sh 'docker build .'
                 sh '/usr/local/bin/docker-compose --file src/test/docker-compose.yaml run -e AUTOFOCUS_API_KEY=${AUTOFOCUS_API_KEY} pandorica'
             }
         }
@@ -14,6 +15,7 @@ pipeline {
     post {
         cleanup {
             sh 'docker rm -f testelastic_con'
+            sh 'docker rm -f testpandorica_con'
         }
     }
 }
