@@ -307,8 +307,9 @@ if __name__ == '__main__':
         #                                 chrome_driver=os.getenv('DRIVER'),
         #                                 binary_location=os.getenv('BINARY_LOCATION'),
                                         download_dir=os.getenv('DOWNLOAD_DIR'))
+    #exit()
+    scraper.download_release()
     exit()
-    scraper.full_download()
 
     # Parse domains and write them to the database.
     versions = get_unanalyzed_version_details()
