@@ -1,10 +1,5 @@
 pipeline {
-    agent {
-        docker {
-            image 'paloaltonetworks/pandorica_test_elk:latest'
-            alwaysPull true
-        }
-    }
+    agent any
     environment {
         AUTOFOCUS_API_KEY_=credentials('AUTOFOCUS_API_KEY')
         AUTOFOCUS_API_KEY="${AUTOFOCUS_API_KEY_}"
