@@ -299,7 +299,6 @@ if __name__ == '__main__':
     connections.create_connection(host=os.getenv('ELASTIC_IP'))
 
     # wait_for_elastic(os.getenv('ELASTIC_IP'))
-    # exit()
 
     # Download latest release notes.
     scraper = ElasticEngToolsDownloader(ip=os.getenv('FW_IP'), username=os.getenv('FW_USERNAME'),
@@ -307,7 +306,6 @@ if __name__ == '__main__':
         #                                 chrome_driver=os.getenv('DRIVER'),
         #                                 binary_location=os.getenv('BINARY_LOCATION'),
                                         download_dir=os.getenv('DOWNLOAD_DIR'))
-    #exit()
     scraper.download_release()
     exit()
 
