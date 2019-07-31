@@ -176,7 +176,7 @@ def test_all():
             dom_search.execute()
 
             for hit in dom_search:
-                logging.info(hit)
+                logging.debug(hit)
                 present = True
                 for key, value in case.items():
                     # Generic domains have no threat name; will give key error.
