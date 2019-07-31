@@ -180,7 +180,7 @@ def test_all():
                 present = True
                 for key, value in case.items():
                     # Generic domains have no threat name; will give key error.
-                    if case['header'] == 'generic' and key == 'threat_name':
+                    if key == 'threat_name' and (case['header'] == 'generic' or case['header'] == 'None'):
                         continue
                     assert hit[key] == value, f"Mismatch on {key}, {value}: is {hit[key]} instead."
             if present:
