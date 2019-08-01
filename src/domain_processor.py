@@ -81,7 +81,12 @@ def process_hit(hit):
             try:
                 domain_doc.save()
                 return
-            except ConnectionError:
+            except ConflictError:
+                # Can't be solved by retry. Skip for now.
+                logging.error(f"Elasticsearch conflict (409) writing "
+                              f"{hit.domain} to db. (No tag, which is not the problem.) Skipping.")
+                return
+            except (ConnectionError, ConnectionTimeout, NotFoundError, RequestError, TransportError):
                 # Retry.
                 pass
 
@@ -102,7 +107,12 @@ def process_hit(hit):
         try:
             domain_doc.save()
             return
-        except ConnectionError:
+        except ConflictError:
+            # Can't be solved by retry. Skip for now.
+            logging.error(f"Elasticsearch conflict (409) writing "
+                          f"{hit.domain} to db. {write_dict['tag']} Skipping.")
+            return
+        except (ConnectionError, ConnectionTimeout, NotFoundError, RequestError, TransportError):
             # Retry.
             pass
 
