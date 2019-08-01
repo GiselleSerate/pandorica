@@ -38,7 +38,7 @@ import requests
 
 from domain_processor import process_domains
 from notes_parser import try_parse
-from lib.elasticutils import connect_to_elastic
+from lib.setuputils import connect_to_elastic
 from scraper import DocStatus, VersionDocument
 from testcases import ParseTest
 
