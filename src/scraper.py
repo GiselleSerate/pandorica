@@ -169,13 +169,6 @@ class EngToolsDownloader():
                     raise e
                 sleep(1)
 
-        # Write version and date to Elasticsearch.
-        # version_doc = VersionDocument(meta={'id':self.latest_version})
-        # version_doc.shortversion = self.latest_version.split('-')[0]
-        # version_doc.version = self.latest_version
-        # version_doc.date = self.latest_date
-        # version_doc.status = DocStatus.DOWNLOADED.value
-        # version_doc.save()
         logging.info(f"Finished downloading {self.latest_version}.")
         return True
 
@@ -196,20 +189,21 @@ class ElasticEngToolsDownloader(EngToolsDownloader):
 
     def download_release(self):
         # First check if we have already downloaded the notes.
-        # meta_search = (Search(index='update-details')
-        #                .query('match', version__keyword=self.latest_version))
-        # if meta_search.count() > 0:
-        #     logging.info(f"{self.latest_version} already downloaded, not redownloading.")
-        #     return False
+        meta_search = (Search(index='update-details')
+                       .query('match', version__keyword=self.latest_version))
+        if meta_search.count() > 0:
+            logging.info(f"{self.latest_version} already downloaded, not redownloading.")
+            return False
 
+        # Go download the notes.
         super(ElasticEngToolsDownloader, self).download_release()
 
         # Write version and date to Elasticsearch.
-        # version_doc = VersionDocument(meta={'id':self.latest_version})
-        # version_doc.shortversion = self.latest_version.split('-')[0]
-        # version_doc.version = self.latest_version
-        # version_doc.date = self.latest_date
-        # version_doc.status = DocStatus.DOWNLOADED.value
-        # version_doc.save()
+        version_doc = VersionDocument(meta={'id':self.latest_version})
+        version_doc.shortversion = self.latest_version.split('-')[0]
+        version_doc.version = self.latest_version
+        version_doc.date = self.latest_date
+        version_doc.status = DocStatus.DOWNLOADED.value
+        version_doc.save()
 
-        logging.info(f"WE OK THO WE OK")
+        return True

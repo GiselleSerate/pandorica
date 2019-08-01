@@ -36,7 +36,7 @@ import re
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
-from scraper import ElasticEngToolsDownloader
+from scraper import EngToolsDownloader
 
 
 
@@ -109,18 +109,14 @@ if __name__ == '__main__':
     except ValueError:
         num_output = None
 
-    scraper = ElasticEngToolsDownloader(ip=os.getenv('FW_IP'), username=os.getenv('FW_USERNAME'),
-                                        password=os.getenv('FW_PASSWORD'),
-                                        download_dir=os.getenv('DOWNLOAD_DIR'))
+    scraper = EngToolsDownloader(ip=os.getenv('FW_IP'), username=os.getenv('FW_USERNAME'),
+                                 password=os.getenv('FW_PASSWORD'),
+                                 download_dir=os.getenv('DOWNLOAD_DIR'))
     scraper.download_release()
 
-    # Domains get stored here
-    all_domains = []
-    exit() # TODO
 
     # Open version file
-    latest_version = max(scraper.versions, key=lambda x: x['date'])['version']
-    path = f"{os.getenv('DOWNLOAD_DIR')}/Updates_{latest_version}.html"
+    path = f"{os.getenv('DOWNLOAD_DIR')}/Updates_{scraper.latest_version}.html"
 
     try:
         data = open(path)
@@ -131,6 +127,9 @@ if __name__ == '__main__':
     # Parse file
     soup = BeautifulSoup(data, 'html5lib')
 
+
+    # Domains go in here after being parsed out
+    all_domains = []
 
     # Just parse added
     parse(soup, re.compile(os.getenv('ADD_REGEX')), all_domains)
