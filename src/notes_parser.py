@@ -17,55 +17,26 @@
 '''
 Palo Alto Networks parser.py
 
-Downloads and parses new version notes, then writes domains to Elasticsearch with autofocus details.
+Downloads and parses new version notes, then writes domains to Elasticsearch. Does not tag or aggregate.
 
-Run this file directly as the base. Don't forget to configure the .panrc.
+You may run this file directly. Don't forget to configure the .panrc.
 
 This software is provided without support, warranty, or guarantee.
 Use at your own risk.
 '''
 
 import logging
-from logging.config import dictConfig
 import os
 import re
 from threading import Thread
 
 from bs4 import BeautifulSoup
-from dotenv import load_dotenv
 from elasticsearch.exceptions import ConflictError
-from elasticsearch_dsl import connections, Index, Search, UpdateByQuery
-import requests
+from elasticsearch_dsl import Index, Search, UpdateByQuery
 
 from domain_docs import RetryException, MaintenanceException, DomainDocument
-from domain_processor import process_domains
+from lib.setuputils import config_all
 from scraper import DocStatus, ElasticEngToolsDownloader
-
-
-
-home = os.getenv('HOME')
-dot = os.getcwd()
-env_path = os.path.join(dot, 'src', 'lib', '.defaultrc')
-load_dotenv(dotenv_path=env_path, verbose=True)
-env_path = os.path.join(home, '.panrc')
-load_dotenv(dotenv_path=env_path, verbose=True, override=True)
-
-
-dictConfig({
-    'version': 1,
-    'formatters': {'default': {
-        'format': '[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
-    }},
-    'handlers': {'wsgi': {
-        'class': 'logging.StreamHandler',
-        'stream': 'ext://sys.stdout',
-        'formatter': 'default'
-    }},
-    'root': {
-        'level': os.getenv('LOGGING_LEVEL'),
-        'handlers': ['wsgi']
-    }
-})
 
 
 
@@ -117,8 +88,7 @@ def parse_and_write(soup, string_name, pattern, array, date, version, thread_sta
             split_char = '.'
         split_header = split_raw[0].split(split_char)
         # Create new DomainDocument in db
-        domain_doc = DomainDocument(meta={'id':domain})
-        domain_doc.meta.index = f'content_{version}'
+        domain_doc = DomainDocument(meta={'id':domain, 'index':f'content_{version}'})
         domain_doc.date = date
         domain_doc.version = version
         domain_doc.raw = raw
@@ -179,7 +149,8 @@ def run_parser(path, version, date):
                 meta_search = (Search(index='update-details')
                                .query('match', version__keyword=version))
                 meta_search.execute()
-                complete = 0 # By default, assume incomplete
+                # By default, assume incomplete.
+                complete = 0
                 for hit in meta_search:
                     complete = hit.status >= DocStatus.PARSED.value
                 if complete:
@@ -280,41 +251,20 @@ def get_unanalyzed_version_details():
     return ret_list
 
 
-def wait_for_elastic(ip):
-    '''Wait for Elastic to be up.'''
-    logging.info("Waiting for Elasticsearch.")
-    while True:
-        try:
-            response = requests.get(f"http://{ip}:9200")
-            logging.info(f"Elasticsearch responds with {response}")
-            if response.status_code == 200:
-                break
-        except requests.exceptions.ConnectionError:
-            pass
-    logging.info("Finished waiting for Elasticsearch.")
-
-
-if __name__ == '__main__':
-    connections.create_connection(host=os.getenv('ELASTIC_IP'))
-
-    wait_for_elastic(os.getenv('ELASTIC_IP'))
-    exit()
-
-    # Download latest release notes.
+def download_then_parse_all():
+    '''Download the latest release notes, then parse any unparsed notes.'''
+    # Download latest notes.
     scraper = ElasticEngToolsDownloader(ip=os.getenv('FW_IP'), username=os.getenv('FW_USERNAME'),
                                         password=os.getenv('FW_PASSWORD'),
-        #                                 chrome_driver=os.getenv('DRIVER'),
-        #                                 binary_location=os.getenv('BINARY_LOCATION'),
-                                        download_dir=os.getenv('DOWNLOAD_DIR'),
-                                        elastic_ip=os.getenv('ELASTIC_IP'))
+                                        download_dir=os.getenv('DOWNLOAD_DIR'))
+    new_ver_exists = scraper.download_release()
     exit()
-    scraper.full_download()
 
     # Parse domains and write them to the database.
     versions = get_unanalyzed_version_details()
     # Sometimes the db write for freshly downloaded versions doesn't go through immediately.
     # Wait for at least those details to be in the database.
-    while len(versions) < scraper.num_new_releases:
+    while new_ver_exists and not versions:
         versions = get_unanalyzed_version_details()
     logging.info(f"Parsing the following {len(versions)} versions:")
     logging.info(versions)
@@ -322,7 +272,7 @@ if __name__ == '__main__':
         try_parse(path=f"{os.getenv('DOWNLOAD_DIR')}/Updates_{ver['version']}.html",
                   version=ver['version'], date=ver['date'])
 
-    # Finally, ask AutoFocus about all unprocessed non-generic domains
-    # multiple times (in case of failure).
-    for _ in range(3):
-        process_domains()
+
+if __name__ == '__main__':
+    config_all()
+    download_then_parse_all()
