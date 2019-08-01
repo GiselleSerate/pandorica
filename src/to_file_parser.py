@@ -112,10 +112,11 @@ if __name__ == '__main__':
     scraper = ElasticEngToolsDownloader(ip=os.getenv('FW_IP'), username=os.getenv('FW_USERNAME'),
                                         password=os.getenv('FW_PASSWORD'),
                                         download_dir=os.getenv('DOWNLOAD_DIR'))
-    scraper.latest_download()
+    scraper.download_release()
 
     # Domains get stored here
     all_domains = []
+    exit() # TODO
 
     # Open version file
     latest_version = max(scraper.versions, key=lambda x: x['date'])['version']
