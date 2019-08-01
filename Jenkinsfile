@@ -11,14 +11,9 @@ pipeline {
                 sh 'python notes_parser.py'
             }
         }
-        stage('Tag') {
+        stage('Process') {
             steps {
                 sh 'python domain_processor.py'
-            }
-        }
-        stage('Aggregate') {
-            steps {
-                sh 'python aggregator.py'
             }
         }
     }
