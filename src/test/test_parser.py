@@ -37,7 +37,8 @@ from elasticsearch_dsl import connections, Search
 import requests
 
 from domain_processor import process_domains
-from notes_parser import wait_for_elastic, try_parse
+from notes_parser import try_parse
+from lib.elasticutils import connect_to_elastic
 from scraper import DocStatus, VersionDocument
 from testcases import ParseTest
 
@@ -128,7 +129,7 @@ def test_all():
 
     # Set up connection.
     connections.create_connection(host=os.getenv('ELASTIC_IP'))
-    wait_for_elastic(os.getenv('ELASTIC_IP'))
+    connect_to_elastic(os.getenv('ELASTIC_IP'))
 
     mappings_path = os.path.join(dot, 'install', 'mappings')
     setup_mappings(mappings_path, os.getenv('ELASTIC_IP'))
@@ -163,7 +164,7 @@ def test_all():
     # Actually run parse.
     logging.info(f"Parsing version {parse_test.version} from {parse_test.version_date}")
     try_parse(path=f"{static_dir}/Updates_{parse_test.version}.html",
-                     version=parse_test.version, date=parse_test.version_date)
+              version=parse_test.version, date=parse_test.version_date)
 
     # Now check to see if some representative domains are in the database, with fields as expected.
     for case in parse_test.cases:
@@ -180,7 +181,8 @@ def test_all():
                 present = True
                 for key, value in case.items():
                     # Generic domains have no threat name; will give key error.
-                    if key == 'threat_name' and (case['header'] == 'generic' or case['header'] == 'None'):
+                    if key == 'threat_name' and (case['header'] == 'generic'
+                                                 or case['header'] == 'None'):
                         continue
                     assert hit[key] == value, f"Mismatch on {key}, {value}: is {hit[key]} instead."
             if present:

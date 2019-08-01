@@ -26,12 +26,16 @@ Use at your own risk.
 '''
 
 import logging
+from logging.config import dictConfig
 from multiprocessing import Pool
+import os
 
+from dotenv import load_dotenv
 from elasticsearch_dsl import Search, UpdateByQuery
 from elasticsearch.exceptions import ConflictError, ConnectionTimeout, NotFoundError, RequestError, TransportError
 
 from lib.dnsutils import updateAfStats, getDomainDoc
+from lib.setuputils import config_all
 
 
 
@@ -154,3 +158,13 @@ def process_domains():
                 logging.error("Encountered connection timeout. Skipping this result.")
             # Decrement AF stats.
             day_af_reqs_left -= 1
+
+
+
+if __name__ == '__main__':
+    config_all()
+
+    # Ask AutoFocus about all unprocessed non-generic domains
+    # multiple times (in case of failure).
+    for _ in range(3):
+        process_domains()

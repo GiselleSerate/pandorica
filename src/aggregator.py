@@ -27,27 +27,12 @@ Use at your own risk.
 
 from datetime import datetime
 import logging
-from logging.config import dictConfig
 from statistics import mean
 
 from elasticsearch_dsl import connections, DocType, Integer, Keyword, Search, Text
 
+from lib.setuputils import config_all
 
-dictConfig({
-    'version': 1,
-    'formatters': {'default': {
-        'format': '[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
-    }},
-    'handlers': {'wsgi': {
-        'class': 'logging.StreamHandler',
-        'stream': 'ext://sys.stdout',
-        'formatter': 'default'
-    }},
-    'root': {
-        'level': 'INFO',
-        'handlers': ['wsgi']
-    }
-})
 
 
 class AggregateDocument(DocType):
@@ -111,8 +96,6 @@ def date_difference(earlier, later):
 
 def aggregate_domains():
     '''Sum all domains over all indices.'''
-    # connections.create_connection(host='localhost') # TODO
-
     handled = {}
 
     all_search = Search(index=f"content_*")
@@ -164,4 +147,5 @@ def aggregate_domains():
 
 
 if __name__ == '__main__':
+    config_all()
     aggregate_domains()

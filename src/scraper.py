@@ -157,13 +157,14 @@ class ElasticEngToolsDownloader():
     def download_release(self):
         '''
         Download the release from the engtools server and notate this in the database.
+        Returns a boolean reflecting whether we've downloaded a new version.
         '''
         # First check if we have already downloaded the notes.
         # meta_search = (Search(index='update-details')
         #                .query('match', version__keyword=self.latest_version))
         # if meta_search.count() > 0:
         #     logging.info(f"{self.latest_version} already downloaded, not redownloading.")
-        #     return
+        #     return False
 
         # Try to download these release notes.
         tries = 5
@@ -193,3 +194,4 @@ class ElasticEngToolsDownloader():
         # version_doc.status = DocStatus.DOWNLOADED.value
         # version_doc.save()
         logging.info(f"Finished downloading {self.latest_version}.")
+        return True
