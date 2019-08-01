@@ -30,14 +30,49 @@ from logging.config import dictConfig
 from multiprocessing import Pool
 import os
 
+from dateutil import parser
 from dotenv import load_dotenv
-from elasticsearch_dsl import Search, UpdateByQuery
+from elasticsearch_dsl import Search, Q
 from elasticsearch.exceptions import ConflictError, ConnectionTimeout, NotFoundError, RequestError, TransportError
 
 from domain_docs import DomainDocument
 from lib.dnsutils import updateAfStats, getDomainDoc
 from lib.setuputils import config_all
 
+
+
+def date_difference(earlier, later):
+    '''
+    Calculates the positive difference between two dates.
+    Tolerant of passsing either date first.
+    '''
+    # Convert to datetimes.
+    early_date = parser.parse(earlier)
+    late_date = parser.parse(later)
+    # If the earlier date isn't really earlier, switch.
+    if early_date > late_date:
+        late_date, early_date = early_date, late_date
+    # Calculate difference.
+    difference = late_date - early_date
+    return difference.days
+
+
+
+def calculate_interval(domain_doc):
+    '''
+    Either return the date difference between this doc and the most recent one or, if no most recent one, False.
+
+    Non-keyword arguments:
+    domain_doc -- the DomainDoc, filled in with data, to look backwards from
+    '''
+    # Get the previous times we've seen this domain.
+    prev_search = Search(index='content_*').query('match', domain__keyword=domain_doc.domain).query(Q('range', date={'lt': domain_doc.date})).sort('-date')
+    if prev_search.count() > 0:
+        # Calculate the interval since the last action with this domain.
+        for prev_hit in prev_search:
+            return date_difference(prev_hit.date, domain_doc.date)
+
+    return False
 
 
 def process_hit(hit):
@@ -75,7 +110,12 @@ def process_hit(hit):
     except (AttributeError, IndexError):
         # No tag available. Note that we have processed this entry (but with no tags) and stop.
         logging.info(f"No tag on {hit.domain}.")
-        domain_doc = DomainDocument.get(id=hit.meta.id, index=hit.meta.index)
+        while True:
+            try:
+                domain_doc = DomainDocument.get(id=hit.meta.id, index=hit.meta.index)
+            except (ConnectionError, ConnectionTimeout, NotFoundError, RequestError, TransportError):
+                # Retry.
+                pass
         domain_doc.processed = 1
         while True:
             try:
@@ -93,7 +133,12 @@ def process_hit(hit):
     logging.info(f"Tag on {hit.domain}.")
 
     # Write first tag to db.
-    domain_doc = DomainDocument.get(id=hit.meta.id, index=hit.meta.index)
+    while True:
+        try:
+            domain_doc = DomainDocument.get(id=hit.meta.id, index=hit.meta.index)
+        except (ConnectionError, ConnectionTimeout, NotFoundError, RequestError, TransportError):
+            # Retry.
+            pass
     domain_doc.tag = write_dict['tag']
     domain_doc.tag_name = write_dict['tag_name']
     domain_doc.public_tag_name = write_dict['public_tag_name']
@@ -102,6 +147,13 @@ def process_hit(hit):
     domain_doc.description = write_dict['description']
     domain_doc.source = write_dict['source']
     domain_doc.processed = 2
+    # If there's an interval to be calculated, calculate it.
+    interval = calculate_interval(domain_doc)
+    if interval:
+        if domain_doc.action == 'added':
+            domain_doc.reinsert = interval
+        else:
+            domain_doc.residence = interval
 
     while True:
         try:
