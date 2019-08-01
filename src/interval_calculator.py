@@ -86,7 +86,6 @@ def calculate_repeat_intervals():
         while True:
             try:
                 domain_doc.save()
-                # logging.info(domain_doc.domain)
                 break
             except ConnectionError:
                 # Retry.
