@@ -88,8 +88,7 @@ def parse_and_write(soup, string_name, pattern, array, date, version, thread_sta
             split_char = '.'
         split_header = split_raw[0].split(split_char)
         # Create new DomainDocument in db
-        domain_doc = DomainDocument(meta={'id':domain})
-        domain_doc.meta.index = f'content_{version}'
+        domain_doc = DomainDocument(meta={'id':domain, 'index':f'content_{version}'})
         domain_doc.date = date
         domain_doc.version = version
         domain_doc.raw = raw

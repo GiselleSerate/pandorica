@@ -83,4 +83,4 @@ def config_all():
         }
     })
 
-    connect_to_elastic(os.getenv)
+    connect_to_elastic(os.getenv('ELASTIC_IP'))

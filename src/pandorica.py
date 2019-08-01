@@ -25,8 +25,8 @@ This software is provided without support, warranty, or guarantee.
 Use at your own risk.
 '''
 
-from aggregator import aggregate_domains
 from domain_processor import process_domains
+from interval_calculator import calculate_repeat_intervals
 from lib.setuputils import config_all
 from notes_parser import download_then_parse_all
 
@@ -46,7 +46,7 @@ def pandorica():
         process_domains()
 
     # Run aggregation
-    aggregate_domains()
+    calculate_repeat_intervals()
 
 
 if __name__ == '__main__':
