@@ -36,7 +36,7 @@ import re
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
-from scraper import ElasticEngToolsScraper
+from scraper import ElasticEngToolsDownloader
 
 
 
@@ -109,9 +109,9 @@ if __name__ == '__main__':
     except ValueError:
         num_output = None
 
-    scraper = ElasticEngToolsScraper(ip=os.getenv('FW_IP'), username=os.getenv('FW_USERNAME'),
-                                     password=os.getenv('FW_PASSWORD'),
-                                     download_dir=os.getenv('DOWNLOAD_DIR'))
+    scraper = ElasticEngToolsDownloader(ip=os.getenv('FW_IP'), username=os.getenv('FW_USERNAME'),
+                                        password=os.getenv('FW_PASSWORD'),
+                                        download_dir=os.getenv('DOWNLOAD_DIR'))
     scraper.latest_download()
 
     # Domains get stored here
