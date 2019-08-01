@@ -17,7 +17,8 @@
 '''
 Palo Alto Networks domain_processor.py
 
-Provides methods to process domains by querying AutoFocus about them.
+Provides methods to process domains by querying AutoFocus about them, and also calculate
+residence/reinsert intervals.
 
 Use this file as an include rather than running it on its own.
 

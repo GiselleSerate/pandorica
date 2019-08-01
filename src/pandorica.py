@@ -45,9 +45,6 @@ def pandorica():
     for _ in range(3):
         process_domains()
 
-    # Run aggregation
-    calculate_repeat_intervals()
-
 
 if __name__ == '__main__':
     pandorica()
