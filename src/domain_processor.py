@@ -62,8 +62,6 @@ def process_hit(hit):
             # Perhaps could be solved by retry. Probably getDomainDoc should handle, but whatever.
             logging.error(f"Encountered transport error on {hit.domain}.")
 
-    domain_doc = DomainDocument.get(id=hit.meta.id, index=hit.meta.index)
-
     try:
         # Break out tag
         write_dict = {}
@@ -77,6 +75,7 @@ def process_hit(hit):
     except (AttributeError, IndexError):
         # No tag available. Note that we have processed this entry (but with no tags) and stop.
         logging.info(f"No tag on {hit.domain}.")
+        domain_doc = DomainDocument.get(id=hit.meta.id, index=hit.meta.index)
         domain_doc.processed = 1
         while True:
             try:
@@ -89,6 +88,7 @@ def process_hit(hit):
     logging.info(f"Tag on {hit.domain}.")
 
     # Write first tag to db.
+    domain_doc = DomainDocument.get(id=hit.meta.id, index=hit.meta.index)
     domain_doc.tag = write_dict['tag']
     domain_doc.tag_name = write_dict['tag_name']
     domain_doc.public_tag_name = write_dict['public_tag_name']
