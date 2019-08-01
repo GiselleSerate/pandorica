@@ -1,3 +1,13 @@
+void setBuildStatus(String message, String state) {
+  step([
+      $class: "GitHubCommitStatusSetter",
+      reposSource: [$class: "ManuallyEnteredRepositorySource", url: "https://github.com/my-org/my-repo"],
+      contextSource: [$class: "ManuallyEnteredCommitContextSource", context: "ci/jenkins/build-status"],
+      errorHandlers: [[$class: "ChangingBuildStatusErrorHandler", result: "UNSTABLE"]],
+      statusResultSource: [ $class: "ConditionalStatusResultSource", results: [[$class: "AnyBuildResult", message: message, state: state]] ]
+  ]);
+}
+
 pipeline {
     agent any
     environment {
@@ -5,14 +15,27 @@ pipeline {
         AUTOFOCUS_API_KEY="${AUTOFOCUS_API_KEY_}"
     }
     stages {
-        stage('Everything') {
+        stage('Setup') {
+            setBuildStatus("Build pending", "PENDING")
+        }
+        stage('Build') {
             steps {
                 sh 'docker build --tag pandorica:test .'
+            }
+        }
+        stage('Test') {
+            steps {
                 sh '/usr/local/bin/docker-compose --file src/test/docker-compose.yaml run -e AUTOFOCUS_API_KEY=${AUTOFOCUS_API_KEY} --name testpandorica_con pandorica'
             }
         }
     }
     post {
+        success {
+            setBuildStatus("Build succeeded", "SUCCESS");
+        }
+        failure {
+            setBuildStatus("Build failed", "FAILURE");
+        }
         cleanup {
             sh 'docker rm -f testelastic_con'
             sh 'docker rm -f testpandorica_con'
