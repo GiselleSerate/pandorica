@@ -34,6 +34,7 @@ from dotenv import load_dotenv
 from elasticsearch_dsl import Search, UpdateByQuery
 from elasticsearch.exceptions import ConflictError, ConnectionTimeout, NotFoundError, RequestError, TransportError
 
+from domain_docs import DomainDocument
 from lib.dnsutils import updateAfStats, getDomainDoc
 from lib.setuputils import config_all
 
@@ -61,6 +62,8 @@ def process_hit(hit):
             # Perhaps could be solved by retry. Probably getDomainDoc should handle, but whatever.
             logging.error(f"Encountered transport error on {hit.domain}.")
 
+    domain_doc = DomainDocument.get(id=hit.meta.id, index=hit.meta.index)
+
     try:
         # Break out tag
         write_dict = {}
@@ -74,46 +77,32 @@ def process_hit(hit):
     except (AttributeError, IndexError):
         # No tag available. Note that we have processed this entry (but with no tags) and stop.
         logging.info(f"No tag on {hit.domain}.")
-        no_tag_update = (UpdateByQuery(index=f"content_*")
-                         .query('match', domain__keyword=hit.domain)
-                         .script(source='ctx._source.processed=1', lang='painless'))
+        domain_doc.processed = 1
         while True:
             try:
-                no_tag_update.execute()
+                domain_doc.save()
                 return
-            except ConflictError:
-                # Can't be solved by retry. Skip for now.
-                logging.error(f"Elasticsearch conflict (409) writing "
-                              f"{hit.domain} to db. (No tag, which is not the problem.) Skipping.")
-                return
-            except (ConnectionTimeout, NotFoundError, RequestError, TransportError):
+            except ConnectionError:
                 # Retry.
                 pass
 
     logging.info(f"Tag on {hit.domain}.")
 
     # Write first tag to db.
-    tag_update = (UpdateByQuery(index=f"content_*")
-                  .query('match', domain__keyword=hit.domain)
-                  .script(source='ctx._source.tag=params.tag;'
-                                 'ctx._source.tag_name=params.tag_name;'
-                                 'ctx._source.public_tag_name=params.public_tag_name;'
-                                 'ctx._source.tag_class=params.tag_class;'
-                                 'ctx._source.tag_group=params.tag_group;'
-                                 'ctx._source.description=params.description;'
-                                 'ctx._source.source=params.source;'
-                                 'ctx._source.processed=2',
-                          lang='painless', params=write_dict))
+    domain_doc.tag = write_dict['tag']
+    domain_doc.tag_name = write_dict['tag_name']
+    domain_doc.public_tag_name = write_dict['public_tag_name']
+    domain_doc.tag_class = write_dict['tag_class']
+    domain_doc.tag_group = write_dict['tag_group']
+    domain_doc.description = write_dict['description']
+    domain_doc.source = write_dict['source']
+    domain_doc.processed = 2
+
     while True:
         try:
-            tag_update.execute()
+            domain_doc.save()
             return
-        except ConflictError:
-            # Can't be solved by retry. Skip for now.
-            logging.error(f"Elasticsearch conflict (409) writing "
-                          f"{hit.domain} to db. {write_dict['tag']} Skipping.")
-            return
-        except (ConnectionTimeout, NotFoundError, RequestError, TransportError):
+        except ConnectionError:
             # Retry.
             pass
 
