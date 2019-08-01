@@ -30,6 +30,7 @@ import logging
 from time import sleep
 
 from bs4 import BeautifulSoup
+from dateutil import parser
 from elasticsearch_dsl import connections, Date, DocType, Integer, Keyword, Search, Text
 from urllib.request import urlretrieve
 from urllib.error import HTTPError
@@ -85,6 +86,21 @@ class VersionDocument(DocType):
 
 
 
+def format_datetime(dt):
+    '''
+    Returns a string when presented with a datetime object.
+    Dates returned in formats like 2019-06-22T04:00:23-07:00.
+
+    Non-keyword arguments:
+    dt -- the datetime object to be converted to a string
+    '''
+    raw_string = dt.strftime("%Y-%m-%dT%H:%M:%S%z")
+    # Now add the colon back in
+    datestring = raw_string[:-2] + ':' + raw_string[-2:]
+    return datestring
+
+
+
 class ElasticEngToolsDownloader():
     '''
     A utility that downloads release notes from the engineering tools server
@@ -133,7 +149,10 @@ class ElasticEngToolsDownloader():
         version_el = soup.find('av-version')
         date_el = soup.find('av-release-date')
         self.latest_version = version_el.text
-        self.latest_date = date_el.text
+        dateobj = parser.parse(date_el.text)
+        print(dateobj)
+        print(format_datetime(dateobj))
+        self.latest_date = format_datetime(dateobj)
         logging.debug(f"Firewall says the latest version is {self.latest_version}, "
                       f"released {self.latest_date}.")
 
