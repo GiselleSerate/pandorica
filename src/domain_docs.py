@@ -53,7 +53,13 @@ class DomainDocument(DocType):
     action = Text()
     tags = Text(multi=True)
     processed = Integer()
-
+    # Is this the first time we've seen this domain?
+    # N/A uncalculated, also uncalculated rein/res
+    # 1 first time!
+    # 2 it's a duplicate
+    repeat_status = Integer()
+    reinsert = Integer()
+    residence = Integer()
 
     @classmethod
     def get_indexable(cls):
@@ -76,6 +82,9 @@ class DomainDocument(DocType):
             action=obj.action,
             tags=obj.tags,
             processed=obj.processed,
+            repeat_status=obj.repeat_status,
+            reinsert=obj.reinsert,
+            residence=obj.residence
             )
 
 
