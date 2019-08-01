@@ -36,8 +36,6 @@ from urllib.request import urlretrieve
 from urllib.error import HTTPError
 from pan.xapi import PanXapi
 
-from lib.dateutils import DateString
-
 
 
 @unique
@@ -149,9 +147,8 @@ class ElasticEngToolsDownloader():
         version_el = soup.find('av-version')
         date_el = soup.find('av-release-date')
         self.latest_version = version_el.text
+        # Reformat date to make sure it's the same as everything else I put in Elastic.
         dateobj = parser.parse(date_el.text)
-        print(dateobj)
-        print(format_datetime(dateobj))
         self.latest_date = format_datetime(dateobj)
         logging.debug(f"Firewall says the latest version is {self.latest_version}, "
                       f"released {self.latest_date}.")
