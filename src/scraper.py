@@ -99,22 +99,12 @@ def format_datetime(dt):
 
 
 
-class ElasticEngToolsDownloader():
+class EngToolsDownloader():
     '''
-    A utility that downloads release notes from the engineering tools server
-    and writes this status to Elasticsearch.
+    A utility that downloads release notes from the engineering tools server.
 
-    Non-keyword arguments:
+    Keyword arguments:
     download_dir -- where to download the notes to
-    elastic_ip -- the IP of the database
-    version_override -- optional argument to specify the version BEFORE the one you want to
-        download. Allows you to start downloading from a version besides the latest one from
-        Elasticsearch; useful if Elastic has no version in it
-    date_override -- optional argument used with version_override to set the date of the version
-        specified (the version BEFORE the one you want to download); you need to set this
-        correctly, or all future dates written to Elasticsearch will be wrong. Dates accepted in
-        formats like 2019-06-22T04:00:23-07:00
-
     '''
     def __init__(self, ip=None, username='admin', password='admin',
                  download_dir='contentpacks'):
@@ -159,13 +149,6 @@ class ElasticEngToolsDownloader():
         Download the release from the engtools server and notate this in the database.
         Returns a boolean reflecting whether we've downloaded a new version.
         '''
-        # First check if we have already downloaded the notes.
-        # meta_search = (Search(index='update-details')
-        #                .query('match', version__keyword=self.latest_version))
-        # if meta_search.count() > 0:
-        #     logging.info(f"{self.latest_version} already downloaded, not redownloading.")
-        #     return False
-
         # Try to download these release notes.
         tries = 5
         while True:
@@ -195,3 +178,38 @@ class ElasticEngToolsDownloader():
         # version_doc.save()
         logging.info(f"Finished downloading {self.latest_version}.")
         return True
+
+class ElasticEngToolsDownloader(EngToolsDownloader):
+    '''
+    A utility that downloads release notes from the engineering tools server
+    and writes this status to Elasticsearch.
+
+    Keyword arguments:
+    download_dir -- where to download the notes to
+    elastic_ip -- the IP of the database
+    '''
+
+    def __init__(self, ip=None, username='admin', password='admin',
+                 download_dir='contentpacks', elastic_ip='localhost'):
+        self.elastic_ip = elastic_ip
+        super(ElasticEngToolsDownloader, self).__init__(ip, username, password, download_dir)
+
+    def download_release(self):
+        # First check if we have already downloaded the notes.
+        # meta_search = (Search(index='update-details')
+        #                .query('match', version__keyword=self.latest_version))
+        # if meta_search.count() > 0:
+        #     logging.info(f"{self.latest_version} already downloaded, not redownloading.")
+        #     return False
+
+        super(ElasticEngToolsDownloader, self).download_release()
+
+        # Write version and date to Elasticsearch.
+        # version_doc = VersionDocument(meta={'id':self.latest_version})
+        # version_doc.shortversion = self.latest_version.split('-')[0]
+        # version_doc.version = self.latest_version
+        # version_doc.date = self.latest_date
+        # version_doc.status = DocStatus.DOWNLOADED.value
+        # version_doc.save()
+
+        logging.info(f"WE OK THO WE OK")
