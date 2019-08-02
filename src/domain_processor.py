@@ -55,7 +55,7 @@ def process_hit(hit):
             # Make an autofocus request.
             document = getDomainDoc(hit.domain)
             break
-        except (AttributeError, ConnectionTimeout):
+        except (AttributeError, ConnectionTimeout, TypeError):
             # Got a timeout or None doc, try again and maybe get a real one next time
             pass
         except TransportError:
