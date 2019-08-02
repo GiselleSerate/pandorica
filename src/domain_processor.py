@@ -31,7 +31,7 @@ from multiprocessing import Pool
 import os
 
 from dotenv import load_dotenv
-from elasticsearch_dsl import Search, UpdateByQuery
+from elasticsearch_dsl import Search
 from elasticsearch.exceptions import ConflictError, ConnectionTimeout, NotFoundError, RequestError, TransportError
 
 from domain_docs import DomainDocument
@@ -75,7 +75,12 @@ def process_hit(hit):
     except (AttributeError, IndexError):
         # No tag available. Note that we have processed this entry (but with no tags) and stop.
         logging.info(f"No tag on {hit.domain}.")
-        domain_doc = DomainDocument.get(id=hit.meta.id, index=hit.meta.index)
+        while True:
+            try:
+                domain_doc = DomainDocument.get(id=hit.meta.id, index=hit.meta.index)
+            except (ConnectionError, ConnectionTimeout, NotFoundError, RequestError, TransportError):
+                # Retry.
+                pass
         domain_doc.processed = 1
         while True:
             try:
@@ -93,7 +98,12 @@ def process_hit(hit):
     logging.info(f"Tag on {hit.domain}.")
 
     # Write first tag to db.
-    domain_doc = DomainDocument.get(id=hit.meta.id, index=hit.meta.index)
+    while True:
+        try:
+            domain_doc = DomainDocument.get(id=hit.meta.id, index=hit.meta.index)
+        except (ConnectionError, ConnectionTimeout, NotFoundError, RequestError, TransportError):
+            # Retry.
+            pass
     domain_doc.tag = write_dict['tag']
     domain_doc.tag_name = write_dict['tag_name']
     domain_doc.public_tag_name = write_dict['public_tag_name']
