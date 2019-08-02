@@ -7,7 +7,8 @@ pipeline {
                     sh '. .env/bin/activate'
                     sh 'python -V'
                     sh 'python3 -V'
-                    sh 'python src/notes_parser.py'
+                    sh '.env/bin/python -V'
+                    sh '.env/bin/python src/notes_parser.py'
                 }
             }
         }
@@ -15,7 +16,7 @@ pipeline {
             steps {
                 dir('/home/paloalto/pandorica_container/pandorica') {
                     sh '. .env/bin/activate'
-                    sh 'python src/domain_processor.py'
+                    sh '.env/bin/python src/domain_processor.py'
                 }
             }
         }
@@ -23,7 +24,7 @@ pipeline {
             steps {
                 dir('/home/paloalto/pandorica_container/pandorica') {
                     sh '. .env/bin/activate'
-                    sh 'python src/interval_calculator.py'
+                    sh '.env/bin/python src/interval_calculator.py'
                 }
             }
         }
