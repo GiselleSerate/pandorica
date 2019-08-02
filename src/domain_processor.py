@@ -78,6 +78,7 @@ def process_hit(hit):
         while True:
             try:
                 domain_doc = DomainDocument.get(id=hit.meta.id, index=hit.meta.index)
+                break
             except (ConnectionError, ConnectionTimeout, NotFoundError, RequestError, TransportError):
                 # Retry.
                 pass
@@ -101,6 +102,7 @@ def process_hit(hit):
     while True:
         try:
             domain_doc = DomainDocument.get(id=hit.meta.id, index=hit.meta.index)
+            break
         except (ConnectionError, ConnectionTimeout, NotFoundError, RequestError, TransportError):
             # Retry.
             pass
