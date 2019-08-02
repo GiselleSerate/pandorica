@@ -114,7 +114,6 @@ def process_hit(hit):
     domain_doc.description = write_dict['description']
     domain_doc.source = write_dict['source']
     domain_doc.processed = 2
-
     while True:
         try:
             domain_doc.save()

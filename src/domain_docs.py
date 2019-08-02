@@ -25,6 +25,8 @@ This software is provided without support, warranty, or guarantee.
 Use at your own risk.
 '''
 
+from enum import IntEnum, unique
+
 from elasticsearch_dsl import Date, DocType, Integer, Keyword, Text
 
 
@@ -36,6 +38,15 @@ class RetryException(Exception):
 
 class MaintenanceException(Exception):
     '''Raised when the script may be now obsolete due to format changes, etc.'''
+
+
+
+@unique
+class DocStatus(IntEnum):
+    '''Defines document statuses.'''
+    DOWNLOADED = 1
+    PARSED = 2
+    AUTOFOCUSED = 3
 
 
 
@@ -90,3 +101,40 @@ class DomainDocument(DocType):
 
     def save(self, **kwargs):
         return super(DomainDocument, self).save(**kwargs)
+
+
+
+class VersionDocument(DocType):
+    '''Contains update metadata.'''
+    id = Text(analyzer='snowball', fields={'raw': Keyword()})
+    shortversion = Text()
+    version = Text()
+    date = Date()
+    status = Integer()
+
+
+    class Index:
+        '''Defines the index to send documents to.'''
+        name = 'update-details'
+
+
+    @classmethod
+    def get_indexable(cls):
+        '''Getter for objects.'''
+        return cls.get_model().get_objects()
+
+
+    @classmethod
+    def from_obj(cls, obj):
+        '''Convert to class.'''
+        return cls(
+            id=obj.id,
+            shortversion=obj.shortversion,
+            version=obj.version,
+            date=obj.date,
+            status=obj.status,
+            )
+
+
+    def save(self, **kwargs):
+        return super(VersionDocument, self).save(**kwargs)

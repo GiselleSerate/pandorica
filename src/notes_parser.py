@@ -31,12 +31,12 @@ import re
 from threading import Thread
 
 from bs4 import BeautifulSoup
-from elasticsearch.exceptions import ConflictError
+from elasticsearch.exceptions import ConflictError, ConnectionTimeout, NotFoundError, RequestError, TransportError
 from elasticsearch_dsl import Index, Search, UpdateByQuery
 
-from domain_docs import RetryException, MaintenanceException, DomainDocument
+from domain_docs import DocStatus, DomainDocument, MaintenanceException, RetryException, VersionDocument
 from lib.setuputils import config_all
-from scraper import DocStatus, ElasticEngToolsDownloader
+from scraper import ElasticEngToolsDownloader
 
 
 
@@ -226,16 +226,22 @@ def try_parse(path, version, date):
         tries_left -= 1
 
     # Tell update details that downloaded version has been consumed.
-    ubq = (UpdateByQuery(index='update-details')
-           .query('match', version__keyword=version)
-           .script(source='ctx._source.status=params.status',
-                   lang='painless', params={'status':DocStatus.PARSED.value}))
     while True:
         try:
-            ubq.execute()
+            version_doc = VersionDocument.get(id=version)
             break
-        except ConflictError:
-            logging.warning("Conflict with Elasticsearch, retrying.")
+        except (ConnectionError, ConnectionTimeout, NotFoundError, RequestError, TransportError):
+            # Retry.
+            pass
+    version_doc.status = DocStatus.PARSED.value
+    while True:
+        try:
+            version_doc.save()
+            return
+        except (ConflictError, ConnectionError, ConnectionTimeout,
+                NotFoundError, RequestError, TransportError):
+            # Retry.
+            pass
 
 
 def get_unanalyzed_version_details():

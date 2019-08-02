@@ -25,7 +25,6 @@ This software is provided without support, warranty, or guarantee.
 Use at your own risk.
 '''
 
-from enum import IntEnum, unique
 import logging
 from time import sleep
 
@@ -37,50 +36,8 @@ from urllib.error import HTTPError
 from pan.xapi import PanXapi
 
 
+from domain_docs import DocStatus, VersionDocument
 
-@unique
-class DocStatus(IntEnum):
-    '''Defines document statuses.'''
-    DOWNLOADED = 1
-    PARSED = 2
-    AUTOFOCUSED = 3
-
-
-
-class VersionDocument(DocType):
-    '''Contains update metadata.'''
-    id = Text(analyzer='snowball', fields={'raw': Keyword()})
-    shortversion = Text()
-    version = Text()
-    date = Date()
-    status = Integer()
-
-
-    class Index:
-        '''Defines the index to send documents to.'''
-        name = 'update-details'
-
-
-    @classmethod
-    def get_indexable(cls):
-        '''Getter for objects.'''
-        return cls.get_model().get_objects()
-
-
-    @classmethod
-    def from_obj(cls, obj):
-        '''Convert to class.'''
-        return cls(
-            id=obj.id,
-            shortversion=obj.shortversion,
-            version=obj.version,
-            date=obj.date,
-            status=obj.status,
-            )
-
-
-    def save(self, **kwargs):
-        return super(VersionDocument, self).save(**kwargs)
 
 
 
