@@ -265,7 +265,6 @@ def download_then_parse_all():
                                         password=os.getenv('FW_PASSWORD'),
                                         download_dir=os.getenv('DOWNLOAD_DIR'))
     new_ver_exists = scraper.download_release()
-    exit()
 
     # Parse domains and write them to the database.
     versions = get_unanalyzed_version_details()
