@@ -5,6 +5,8 @@ pipeline {
             steps {
                 dir('/home/paloalto/pandorica_container/pandorica') {
                     sh '. .env/bin/activate'
+                    sh 'python -V'
+                    sh 'python3 -V'
                     sh 'python src/notes_parser.py'
                 }
             }
