@@ -32,7 +32,7 @@ from statistics import mean
 from dateutil import parser
 from elasticsearch_dsl import connections, DocType, Integer, Keyword, Q, Search, Text
 
-from domain_docs import DomainDocument
+from domain_docs import DomainDocument, RepeatStatus
 from lib.setuputils import config_all
 
 
@@ -64,10 +64,13 @@ def calculate_repeat_intervals():
         domain_doc = DomainDocument.get(id=hit.domain, index=f"content_{hit.version}")
 
         # Get the previous times we've seen this domain.
-        prev_search = Search(index='content_*').query('match', domain__keyword=hit.domain).query(Q('range', date={'lt': hit.date})).sort('-date')
+        prev_search = (Search(index='content_*')
+                       .query('match', domain__keyword=hit.domain)
+                       .query(Q('range', date={'lt': hit.date}))
+                       .sort('-date'))
         if prev_search.count() > 0:
             # Mark this as a non-first repeat domain.
-            domain_doc.repeat_status = 2
+            domain_doc.repeat_status = RepeatStatus.DUPLICATE.value
 
             # Calculate the interval since the last action with this domain.
             for prev_hit in prev_search[:1]:
@@ -80,8 +83,8 @@ def calculate_repeat_intervals():
                 # The last time we saw this domain, we were adding it; now we are removing it.
                 domain_doc.residence = difference
         else:
-            # Never seen this domain before this incident. Write this one as first: repeat_status=1.
-            domain_doc.repeat_status = 1
+            # Never seen this domain before this incident.
+            domain_doc.repeat_status = RepeatStatus.FIRST_TIME.value
 
         while True:
             try:

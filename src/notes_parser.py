@@ -17,7 +17,8 @@
 '''
 Palo Alto Networks parser.py
 
-Downloads and parses new version notes, then writes domains to Elasticsearch. Does not tag or aggregate.
+Downloads and parses new version notes, then writes domains to Elasticsearch.
+Does not tag or aggregate.
 
 You may run this file directly. Don't forget to configure the .panrc.
 
@@ -32,9 +33,9 @@ from threading import Thread
 
 from bs4 import BeautifulSoup
 from elasticsearch.exceptions import ConflictError, ConnectionTimeout, NotFoundError, RequestError, TransportError
-from elasticsearch_dsl import Index, Search, UpdateByQuery
+from elasticsearch_dsl import Index, Search
 
-from domain_docs import DocStatus, DomainDocument, MaintenanceException, RetryException, VersionDocument
+from domain_docs import AFStatus, DocStatus, DomainDocument, MaintenanceException, RetryException, VersionDocument
 from lib.setuputils import config_all
 from scraper import ElasticEngToolsDownloader
 
@@ -97,7 +98,7 @@ def parse_and_write(soup, string_name, pattern, array, date, version, thread_sta
         domain_doc.threat_name = split_header[1] if len(split_header) > 1 else None
         domain_doc.domain = split_raw[1]
         domain_doc.action = string_name
-        domain_doc.processed = 0
+        domain_doc.processed = AFStatus.TAG_NEEDED.value
 
         while True:
             try:

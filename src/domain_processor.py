@@ -34,7 +34,7 @@ from dotenv import load_dotenv
 from elasticsearch_dsl import Search
 from elasticsearch.exceptions import ConflictError, ConnectionTimeout, NotFoundError, RequestError, TransportError
 
-from domain_docs import DomainDocument
+from domain_docs import AFStatus, DomainDocument
 from lib.dnsutils import updateAfStats, getDomainDoc
 from lib.setuputils import config_all
 
@@ -82,7 +82,7 @@ def process_hit(hit):
             except (ConnectionError, ConnectionTimeout, NotFoundError, RequestError, TransportError):
                 # Retry.
                 pass
-        domain_doc.processed = 1
+        domain_doc.processed = AFStatus.NO_TAG.value
         while True:
             try:
                 domain_doc.save()
@@ -113,7 +113,7 @@ def process_hit(hit):
     domain_doc.tag_group = write_dict['tag_group']
     domain_doc.description = write_dict['description']
     domain_doc.source = write_dict['source']
-    domain_doc.processed = 2
+    domain_doc.processed = AFStatus.HAS_TAG.value
     while True:
         try:
             domain_doc.save()

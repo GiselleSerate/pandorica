@@ -43,10 +43,32 @@ class MaintenanceException(Exception):
 
 @unique
 class DocStatus(IntEnum):
-    '''Defines document statuses.'''
+    '''Defines content update statuses.'''
     DOWNLOADED = 1
     PARSED = 2
-    AUTOFOCUSED = 3
+
+
+
+@unique
+class AFStatus(IntEnum):
+    '''
+    Defines AF tag status of a specific domain.
+    '''
+    TAG_NEEDED = 0
+    NO_TAG = 1
+    HAS_TAG = 2
+
+
+
+@unique
+class RepeatStatus(IntEnum):
+    '''
+    Defines repeat calculation status of a specific domain.
+    Is this domain incident the first time we've seen this domain?
+    '''
+    # If N/A, uncalculated; also uncalculated reinsert/residence.
+    FIRST_TIME = 1
+    DUPLICATE = 2
 
 
 
@@ -64,10 +86,6 @@ class DomainDocument(DocType):
     action = Text()
     tags = Text(multi=True)
     processed = Integer()
-    # Is this the first time we've seen this domain?
-    # N/A uncalculated, also uncalculated rein/res
-    # 1 first time!
-    # 2 it's a duplicate
     repeat_status = Integer()
     reinsert = Integer()
     residence = Integer()
