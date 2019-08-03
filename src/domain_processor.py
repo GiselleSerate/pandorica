@@ -55,15 +55,11 @@ def process_hit(hit):
             # Make an autofocus request.
             document = getDomainDoc(hit.domain)
             break
-        except (AttributeError, ConnectionTimeout, TypeError):
-            # Got a timeout or None doc, try again and maybe get a real one next time
-            pass
-        except TransportError:
-            # Perhaps could be solved by retry. Probably getDomainDoc should handle, but whatever.
-            logging.error(f"Encountered transport error on {hit.domain}.")
+        except Exception as e:
+            # Just retry it.
+            logging.warning(e)
 
     try:
-        logging.error(f"DID YOU CHANGE THE CODE?")
         # Break out tag
         write_dict = {}
         write_dict['tag'] = document.tags[0][2][0]
@@ -93,13 +89,9 @@ def process_hit(hit):
                 logging.error(f"Elasticsearch conflict (409) writing "
                               f"{hit.domain} to db. (No tag, which is not the problem.) Skipping.")
                 return
-            except KeyError as e:
-                # Can't be solved by retry. Skip for now.
-                logging.error(f"KeyError saving doc. Retrying.")
-                logging.debug(e)
-            except (ConnectionError, ConnectionTimeout, NotFoundError, RequestError, TransportError):
-                # Retry.
-                pass
+            except Exception as e:
+                # Just retry it.
+                logging.warning(e)
 
     logging.info(f"Tag on {hit.domain}.")
 
@@ -108,9 +100,9 @@ def process_hit(hit):
         try:
             domain_doc = DomainDocument.get(id=hit.meta.id, index=hit.meta.index)
             break
-        except (ConnectionError, ConnectionTimeout, NotFoundError, RequestError, TransportError):
-            # Retry.
-            pass
+        except Exception as e:
+            # Just retry it.
+            logging.warning(e)
     domain_doc.tag = write_dict['tag']
     domain_doc.tag_name = write_dict['tag_name']
     domain_doc.public_tag_name = write_dict['public_tag_name']
@@ -128,13 +120,9 @@ def process_hit(hit):
             logging.error(f"Elasticsearch conflict (409) writing "
                           f"{hit.domain} to db. {write_dict['tag']} Skipping.")
             return
-        except KeyError as e:
-            # Can't be solved by retry. Skip for now.
-            logging.error(f"KeyError saving doc. Retrying.")
-            logging.debug(e)
-        except (ConnectionError, ConnectionTimeout, NotFoundError, RequestError, TransportError):
-            # Retry.
-            pass
+        except Exception as e:
+            # Just retry it.
+            logging.warning(e)
 
 
 def process_domains():
