@@ -72,7 +72,7 @@ def process_hit(hit):
         write_dict['tag_group'] = write_dict['tag'][3]
         write_dict['description'] = write_dict['tag'][4]
         write_dict['source'] = write_dict['public_tag_name'].split('.')[0]
-    except (AttributeError, IndexError):
+    except (AttributeError, IndexError, TypeError):
         # No tag available. Note that we have processed this entry (but with no tags) and stop.
         logging.info(f"No tag on {hit.domain}.")
         while True:
