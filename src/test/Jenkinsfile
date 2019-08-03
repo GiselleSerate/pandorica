@@ -41,6 +41,7 @@ pipeline {
         cleanup {
             sh 'docker rm -f testelastic_con'
             sh 'docker rm -f testpandorica_con'
+            sh 'docker images'
         }
     }
 }
