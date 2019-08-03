@@ -63,6 +63,7 @@ def process_hit(hit):
             logging.error(f"Encountered transport error on {hit.domain}.")
 
     try:
+        logging.error(f"DID YOU CHANGE THE CODE?")
         # Break out tag
         write_dict = {}
         write_dict['tag'] = document.tags[0][2][0]
