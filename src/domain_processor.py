@@ -92,6 +92,10 @@ def process_hit(hit):
                 logging.error(f"Elasticsearch conflict (409) writing "
                               f"{hit.domain} to db. (No tag, which is not the problem.) Skipping.")
                 return
+            except KeyError as e:
+                # Can't be solved by retry. Skip for now.
+                logging.error(f"KeyError saving doc. Retrying.")
+                logging.debug(e)
             except (ConnectionError, ConnectionTimeout, NotFoundError, RequestError, TransportError):
                 # Retry.
                 pass
@@ -123,6 +127,10 @@ def process_hit(hit):
             logging.error(f"Elasticsearch conflict (409) writing "
                           f"{hit.domain} to db. {write_dict['tag']} Skipping.")
             return
+        except KeyError as e:
+            # Can't be solved by retry. Skip for now.
+            logging.error(f"KeyError saving doc. Retrying.")
+            logging.debug(e)
         except (ConnectionError, ConnectionTimeout, NotFoundError, RequestError, TransportError):
             # Retry.
             pass
