@@ -76,9 +76,9 @@ def process_hit(hit):
             try:
                 domain_doc = DomainDocument.get(id=hit.meta.id, index=hit.meta.index)
                 break
-            except (ConnectionError, ConnectionTimeout, NotFoundError, RequestError, TransportError):
+            except Exception as e:
                 # Retry.
-                pass
+                logging.warning(e)
         domain_doc.processed = AFStatus.NO_TAG.value
         while True:
             try:
@@ -161,8 +161,8 @@ def process_domains():
             except StopIteration:
                 logging.info("No more domains to process.")
                 return
-            except ConnectionTimeout:
-                logging.error("Encountered connection timeout. Skipping this result.")
+            except (NotFoundError, ConnectionTimeout) as e:
+                logging.error("Encountered temporary issue. Skipping this result.")
             # Decrement AF stats.
             day_af_reqs_left -= 1
 
