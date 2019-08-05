@@ -162,7 +162,8 @@ def process_domains():
                 logging.info("No more domains to process.")
                 return
             except (NotFoundError, ConnectionTimeout) as e:
-                logging.error("Encountered temporary issue. Skipping this result.")
+                logging.warning("Encountered temporary issue. Skipping this result.")
+                logging.warning(e)
             # Decrement AF stats.
             day_af_reqs_left -= 1
 
