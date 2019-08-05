@@ -45,9 +45,9 @@ def date_difference(earlier, later):
     # Convert to datetimes.
     early_date = parser.parse(earlier)
     late_date = parser.parse(later)
-    early_date.replace(tzinfo=None)
-    late_date.replace(tzinfo=None)
     # If the earlier date isn't really earlier, switch.
+    early_date = early_date.replace(tzinfo=None)
+    late_date = late_date.replace(tzinfo=None)
     if early_date > late_date:
         late_date, early_date = early_date, late_date
     # Calculate difference.
