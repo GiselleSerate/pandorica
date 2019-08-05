@@ -40,8 +40,6 @@ from lib.setuputils import config_all
 from scraper import ElasticEngToolsDownloader
 
 
-from dateutil import parser
-
 
 def parse_and_write(soup, string_name, pattern, array, date, version, thread_status):
     '''
@@ -266,11 +264,6 @@ def download_then_parse_all():
     scraper = ElasticEngToolsDownloader(ip=os.getenv('FW_IP'), username=os.getenv('FW_USERNAME'),
                                         password=os.getenv('FW_PASSWORD'),
                                         download_dir=os.getenv('DOWNLOAD_DIR'))
-    scraper.latest_version = '3060-3570'
-    scraper.latest_date = parser.parse('2019/08/04 04:00:00 PDT')
-    new_ver_exists = scraper.download_release()
-    scraper.latest_version = '3061-3571'
-    scraper.latest_date = parser.parse('2019/08/05 04:04:44 PDT')
     new_ver_exists = scraper.download_release()
 
     # Parse domains and write them to the database.
