@@ -1,11 +1,5 @@
 # PANDORICA (Palo Alto Networks DNS Obsolete Record Interchange Capability Assessment)
 
-## Setup
-- [ ] Secure a PANW firewall to scrape release notes from.
-- [ ] Set up and start an elasticsearch instance using a Docker container (more detailed instructions TBD).
-- [ ] Download Chrome and an appropriate driver. 
-- [ ] Configure the `~/.panrc` to override `pandorica/src/lib/.defaultrc` where necessary.
-- [ ] Configure the Elasticsearch index mappings using the [install script in Safe Networking](https://github.com/PaloAltoNetworks/safe-networking/blob/master/install/setup.sh).
+Why, exactly, do we swap certain DNS C2 domains in and out of Palo Alto Networks firewalls daily? Pandorica provides insight into this question and others by collecting this data from Palo Alto's daily antivirus release notes, aggregating it, and displaying it in Kibana dashboards.
 
-## Usage
-Run `parser.py` regularly. For a full set of data, run it at least once every five days, or else the release notes will not be available on the firewall. Sometimes domains' tags will not be retrieved properly from AutoFocus, so running the script more than once a day might be advisable to use AutoFocus points most efficiently.
+Consult the [wiki](https://github.com/GiselleSerate/pandorica/wiki) for further documentation.
