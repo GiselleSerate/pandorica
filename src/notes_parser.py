@@ -32,10 +32,12 @@ import re
 from threading import Thread
 
 from bs4 import BeautifulSoup
-from elasticsearch.exceptions import ConflictError, ConnectionTimeout, NotFoundError, RequestError, TransportError
+from elasticsearch.exceptions import (ConflictError, ConnectionTimeout,
+                                      NotFoundError, RequestError, TransportError)
 from elasticsearch_dsl import Index, Search
 
-from domain_docs import AFStatus, DocStatus, DomainDocument, MaintenanceException, RetryException, VersionDocument
+from domain_docs import (AFStatus, DocStatus, DomainDocument,
+                         MaintenanceException, RetryException, VersionDocument)
 from lib.setuputils import config_all
 from scraper import ElasticEngToolsDownloader
 
@@ -45,7 +47,7 @@ def parse_and_write(soup, string_name, pattern, array, date, version, thread_sta
     '''
     Pulls all domains of one type from the soup and then writes them to the database.
 
-    Keyword arguments:
+    Non-keyword arguments:
     soup -- the soup to parse
     string_name -- the string representation of the type of docs
     pattern -- the section header pattern to find in the soup
@@ -120,9 +122,7 @@ def run_parser(path, version, date):
     path -- the local path to the release notes (may be relative)
     version -- the full version number
     date -- the release date
-
     '''
-
     # Domains get stored here
     added = []
     removed = []
@@ -200,7 +200,6 @@ def try_parse(path, version, date):
     path -- the local path to the release notes (may be relative)
     version -- the full version number
     date -- the release date
-
     '''
     try:
         tries_left = int(os.getenv('NUM_TRIES'))

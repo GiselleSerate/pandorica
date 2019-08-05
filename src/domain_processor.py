@@ -26,13 +26,12 @@ Use at your own risk.
 '''
 
 import logging
-from logging.config import dictConfig
 from multiprocessing import Pool
-import os
 
 from dotenv import load_dotenv
 from elasticsearch_dsl import Search
-from elasticsearch.exceptions import ConflictError, ConnectionTimeout, NotFoundError, RequestError, TransportError
+from elasticsearch.exceptions import (ConflictError, ConnectionTimeout,
+                                      NotFoundError, RequestError, TransportError)
 
 from domain_docs import AFStatus, DomainDocument
 from lib.dnsutils import updateAfStats, getDomainDoc
@@ -131,7 +130,6 @@ def process_domains():
     Note that you MUST create a database connection first (with connections.create_connection)
     before running this function.
     '''
-
     # Search for non-processed and non-generic.
     new_nongeneric_search = (Search(index=f"content_*")
                              .exclude('term', header__keyword='generic')

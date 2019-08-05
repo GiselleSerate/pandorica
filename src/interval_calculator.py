@@ -25,12 +25,10 @@ This software is provided without support, warranty, or guarantee.
 Use at your own risk.
 '''
 
-from datetime import datetime
 import logging
-from statistics import mean
 
 from dateutil import parser
-from elasticsearch_dsl import connections, DocType, Integer, Keyword, Q, Search, Text
+from elasticsearch_dsl import Q, Search
 
 from domain_docs import DomainDocument, RepeatStatus
 from lib.setuputils import config_all
@@ -57,7 +55,6 @@ def date_difference(earlier, later):
 
 def calculate_repeat_intervals():
     '''Determine residence and reinsert times over all indices.'''
-
     # Search for those with no repeat_status.
     uncalculated_search = Search(index='content_*').query(~Q('exists', field='repeat_status'))
     logging.info(f"Calculating intervals for {uncalculated_search.count()} domains.")

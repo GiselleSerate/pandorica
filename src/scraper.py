@@ -27,17 +27,15 @@ Use at your own risk.
 
 import logging
 from time import sleep
+from urllib.request import urlretrieve
+from urllib.error import HTTPError
 
 from bs4 import BeautifulSoup
 from dateutil import parser
-from elasticsearch_dsl import connections, Date, DocType, Integer, Keyword, Search, Text
-from urllib.request import urlretrieve
-from urllib.error import HTTPError
+from elasticsearch_dsl import Search
 from pan.xapi import PanXapi
 
-
 from domain_docs import DocStatus, VersionDocument
-
 
 
 
@@ -61,6 +59,9 @@ class EngToolsDownloader():
     A utility that downloads release notes from the engineering tools server.
 
     Keyword arguments:
+    ip -- the IP of the firewall to check latest version
+    username -- the username of the firewall
+    password -- the password of the firewall
     download_dir -- where to download the notes to
     '''
     def __init__(self, ip=None, username='admin', password='admin',
@@ -78,6 +79,9 @@ class EngToolsDownloader():
 
 
     def _determine_new_release(self):
+        '''
+        Helper function to figure out the latest version and release date from the firewall.
+        '''
         api_instance = PanXapi(hostname=self._ip, api_username=self._username,
                                api_password=self._password)
         # Init status to nothing
@@ -103,7 +107,7 @@ class EngToolsDownloader():
 
     def download_release(self):
         '''
-        Download the release from the engtools server and notate this in the database.
+        Download the release from the engtools server.
         Returns a boolean reflecting whether we've downloaded a new version.
         '''
         # Try to download these release notes.
@@ -122,12 +126,14 @@ class EngToolsDownloader():
                 tries -= 1
                 # We're done waiting; fail for real.
                 if tries == 0:
-                    logging.error(f"Hit more than {tries} HTTPErrors; giving up.")
+                    logging.error(f"Hit too many HTTPErrors; giving up.")
                     raise e
                 sleep(1)
 
         logging.info(f"Finished downloading {self.latest_version}.")
         return True
+
+
 
 class ElasticEngToolsDownloader(EngToolsDownloader):
     '''
@@ -135,16 +141,22 @@ class ElasticEngToolsDownloader(EngToolsDownloader):
     and writes this status to Elasticsearch.
 
     Keyword arguments:
+    ip -- the IP of the firewall to check latest version
+    username -- the username of the firewall
+    password -- the password of the firewall
     download_dir -- where to download the notes to
     elastic_ip -- the IP of the database
     '''
-
     def __init__(self, ip=None, username='admin', password='admin',
                  download_dir='contentpacks', elastic_ip='localhost'):
         self.elastic_ip = elastic_ip
         super(ElasticEngToolsDownloader, self).__init__(ip, username, password, download_dir)
 
     def download_release(self):
+        '''
+        Download the release from the engtools server and notate this in the database.
+        Returns a boolean reflecting whether we've downloaded a new version.
+        '''
         # First check if we have already downloaded the notes.
         meta_search = (Search(index='update-details')
                        .query('match', version__keyword=self.latest_version))
