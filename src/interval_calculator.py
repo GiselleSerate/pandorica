@@ -57,7 +57,7 @@ def calculate_repeat_intervals():
     '''Determine residence and reinsert times over all indices.'''
 
     # Search for those with no repeat_status.
-    uncalculated_search = Search(index='content_305*').query(~Q('exists', field='repeat_status'))
+    uncalculated_search = Search(index='content_*').query(~Q('exists', field='repeat_status'))
     logging.info(f"Calculating intervals for {uncalculated_search.count()} domains.")
 
     for hit in uncalculated_search.scan():
