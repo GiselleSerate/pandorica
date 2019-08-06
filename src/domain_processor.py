@@ -49,17 +49,14 @@ def process_hit(hit):
     '''
     logging.info(f"Looking up tags for {hit.domain} . . .")
 
-    # Make an autofocus request.
-    document = getDomainDoc(hit.domain)
-
-    # while True:
-    #     try:
-    #         # Make an autofocus request.
-    #         document = getDomainDoc(hit.domain)
-    #         break
-    #     except Exception as e:
-    #         # Just retry it.
-    #         logging.warning(e)
+    while True:
+        try:
+            # Make an autofocus request.
+            document = getDomainDoc(hit.domain)
+            break
+        except Exception as e:
+            # Just retry it.
+            logging.warning(e)
 
     try:
         # Break out tag
