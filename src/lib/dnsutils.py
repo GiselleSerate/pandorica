@@ -42,7 +42,7 @@ def updateAfStats():
     try:
         afInfo = returnData['bucket_info']
         logging.debug(f"Updating af-details with "
-                         f"{afInfo['daily_points_remaining']} remaining points")
+                      f"{afInfo['daily_points_remaining']} remaining points")
         # Update the af-details doc in the DB
         afDoc.minute_points = afInfo['minute_points']
         afDoc.minute_points_remaining = afInfo['minute_points_remaining']
@@ -73,8 +73,8 @@ def checkAfPoints(bucketInfo):
     afNoExecTime = int(os.getenv('AF_NOEXEC_CKTIME'))
 
     logging.debug(f"AF_POINTS SYSTEM settings: AF_POINT_NOEXEC: "
-                     f"{noExecPoints}, AF_POINTS_LOW: {afPointLow}, "
-                     f"AF_NOEXEC_CKTIME: {afNoExecTime}")
+                  f"{noExecPoints}, AF_POINTS_LOW: {afPointLow}, "
+                  f"AF_NOEXEC_CKTIME: {afNoExecTime}")
 
     # Check the points total against the AF_POINT_NOEXEC config parameter and
     # go into sleep mode for AF_NOEXEC_CKTIME to stop processing.
@@ -82,7 +82,7 @@ def checkAfPoints(bucketInfo):
         resetFlag = True
         while resetFlag:
             logging.info(f"Sleeping for {afNoExecTime} seconds because daily"
-                            f" point total is {pointsRemaining}")
+                         f" point total is {pointsRemaining}")
             time.sleep(afNoExecTime)
             newBucketInfo = getTagInfo("WildFireTest")
             if newBucketInfo['bucket_info']['daily_points_remaining'] > noExecPoints:
@@ -93,7 +93,7 @@ def checkAfPoints(bucketInfo):
         # low set app config setting AF_POINTS_MODE to True - which will slow
         # down the processing to 1 event at a time.
         logging.info(f"Slowing down execution because daily "
-                        f"point total is {pointsRemaining}")
+                     f"point total is {pointsRemaining}")
         os.putenv('AF_POINTS_MODE', True)
     else:
         # We probably hit a "minute points exceeded" so just wait for a minute
@@ -101,7 +101,7 @@ def checkAfPoints(bucketInfo):
         time.sleep(60)
         # This resets it back to False if the AF points automatically reset
         logging.debug(f"Regular exec since daily point total is "
-                         f" {pointsRemaining}")
+                      f" {pointsRemaining}")
         os.putenv('AF_POINTS_MODE', False)
 
 
@@ -168,11 +168,11 @@ def processTagList(tagObj):
 #                      "description": "Tag has not been assigned to a group"}]
 
 #     logging.debug(f"Querying local cache for {tagName}")
-    
+
 #     try:
 #         tagDoc = TagDetailsDoc.get(id=tagName)
-        
-        
+
+
 #         # check age of doc and set to update the details
 #         if timeLimit > tagDoc.doc_updated:
 #             logging.debug(f"Last updated can't be older than {timeLimit} " +
@@ -196,8 +196,8 @@ def processTagList(tagObj):
 #         logging.info(f"No local cache found for tag {tagName} - Creating")
 #         updateDetails = True
 #         updateType = "Creating"
-        
-        
+
+
 
 #     if updateDetails:
 #         afTagData = getTagInfo(tagName)
@@ -270,7 +270,7 @@ def assessTags(tagsObj):
                 tagDesc = tag[4]
 
                 logging.debug(f"Working on tag {tagName} " +
-                                 f"with class of {tagClass}")
+                              f"with class of {tagClass}")
 
                 if tagClass == "campaign":
                     tagInfo = {"tag_name": tagName, "public_tag_name": tag[0],
@@ -298,24 +298,24 @@ def assessTags(tagsObj):
                     dateDiff = (datetime.datetime.now() - datetime.datetime.strptime(sampleDate, "%Y-%m-%dT%H:%M:%S"))
 
                     logging.debug(f"Calculating confidence level: " +
-                                     f"Day differential of {dateDiff.days}")
+                                  f"Day differential of {dateDiff.days}")
 
                     for days in tagConfLevels:
                         if dateDiff.days < int(days):
                             confLevel = tagConfLevels[days]
                             logging.debug(f"confidence_level for " +
-                                             f"{tagName} @ date " +
-                                             f"{sampleDate}: " +
-                                             f"{confLevel} based on" +
-                                             f" age of {dateDiff.days} days")
+                                          f"{tagName} @ date " +
+                                          f"{sampleDate}: " +
+                                          f"{confLevel} based on" +
+                                          f" age of {dateDiff.days} days")
                             break  # We found the right confidence level
                         else:
                             confLevel = 5
                             logging.debug(f"confidence_level for " +
-                                             f"{tagName} @ date " +
-                                             f"{sampleDate}: " +
-                                             f"{confLevel} based on" +
-                                             f" age of {dateDiff.days} days")
+                                          f"{tagName} @ date " +
+                                          f"{sampleDate}: " +
+                                          f"{confLevel} based on" +
+                                          f" age of {dateDiff.days} days")
 
                     tagInfo = {"tag_name": tagName, "public_tag_name": tag[0],
                                "tag_class": tagClass, "sample_date": sampleDate,
@@ -389,7 +389,7 @@ def getDomainInfo(threatDomain):
     if 'message' in queryData:
         if "Daily Bucket Exceeded" in queryData['message']:
             logging.warning(f"We have exceeded the daily allotment of points "
-                             f"for AutoFocus - going into hibernation mode.")
+                            f"for AutoFocus - going into hibernation mode.")
             checkAfPoints(queryData['bucket_info'])
             # The checkAfPoints will eventually return after the points reset.
             # When they do, reurn the AF query so we don't lose it.
@@ -397,11 +397,11 @@ def getDomainInfo(threatDomain):
             queryResponse = requests.post(url=searchURL, headers=headers,
                                           data=json.dumps(searchData))
             logging.debug(f"Initial AF domain query returned "
-                             f"{queryResponse.json()}")
+                          f"{queryResponse.json()}")
             queryData = queryResponse.json()
         elif "Minute Bucket Exceeded" in queryData['message']:
             logging.warning(f"We have exceeded the minute allotment of points "
-                             f"for AutoFocus - going into hibernation mode.")
+                            f"for AutoFocus - going into hibernation mode.")
             checkAfPoints(queryData['bucket_info'])
             # The checkAfPoints will eventually return after the points reset.
             # When they do, reurn the AF query so we don't lose it.
@@ -409,7 +409,7 @@ def getDomainInfo(threatDomain):
             queryResponse = requests.post(url=searchURL, headers=headers,
                                           data=json.dumps(searchData))
             logging.debug(f"Initial AF domain query returned "
-                             f"{queryResponse.json()}")
+                          f"{queryResponse.json()}")
             queryData = queryResponse.json()
         else:
             logging.error(f"Return from AutoFocus is in error: {queryData}")
@@ -434,9 +434,9 @@ def getDomainInfo(threatDomain):
                 break
             else:
                 logging.info(f"Search completion " +
-                                f"{domainData['af_complete_percentage']}% for " +
-                                f"{threatDomain} at {timer+1} minute(s): " +
-                                f"{domainData}")
+                             f"{domainData['af_complete_percentage']}% for " +
+                             f"{threatDomain} at {timer+1} minute(s): " +
+                             f"{domainData}")
 
         if domainData['total'] != 0:
             for hits in domainData['hits']:
@@ -449,11 +449,11 @@ def getDomainInfo(threatDomain):
                                   tagList))
         else:
             logging.info(f"No samples found for {threatDomain} in time "
-                            f"allotted")
+                         f"allotted")
 
     else:
         logging.error(f"Unable to retrieve domain info from AutoFocus. "
-                         f"The AF query returned {queryData}")
+                      f"The AF query returned {queryData}")
 
     logging.debug(f"getDomainInfo() returns: {domainObj}")
 
@@ -472,22 +472,22 @@ def getDomainDoc(domainName):
                  datetime.timedelta(days=int(os.getenv('DNS_DOMAIN_INFO_MAX_AGE'))))
 
     logging.debug(f"Querying local cache for {domainName}")
-    
+
     try:
         domainDoc = DomainDetailsDoc.get(id=domainName)
 
         # check age of doc and set to update the details
         if timeLimit > domainDoc.doc_updated:
             logging.debug(f"Domain last updated can't be older than "
-                             f"{timeLimit} but the doc was last updated "
-                             f" {domainDoc.doc_updated} so cache should be "
-                             f"updated")
+                          f"{timeLimit} but the doc was last updated "
+                          f" {domainDoc.doc_updated} so cache should be "
+                          f"updated")
             updateDetails = True
             updateType = "Updating"
         else:
             logging.debug(f"Domain last updated can't be older than "
-                             f"{timeLimit} and {domainDoc.doc_updated} is not, "
-                             f"so don't need to update cache")
+                          f"{timeLimit} and {domainDoc.doc_updated} is not, "
+                          f"so don't need to update cache")
 
     except NotFoundError as nfe:
         logging.info(f"No local cache doc found for domain {domainName}")

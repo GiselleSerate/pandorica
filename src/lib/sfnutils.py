@@ -36,7 +36,7 @@ def getLatestTime(indexName):
     now = datetime.utcnow()
     fmt = '%Y-%m-%d %H:%M:%S'
 
-    
+
     try:
         latestDoc = getLatestDoc(indexName)
         timeStamp = datetime.strptime(latestDoc['time'], fmt)
@@ -86,15 +86,15 @@ def processTag(tagName):
                      "description": "Tag has not been assigned to a group"}]
 
     logging.debug(f"Querying local cache for {tagName}")
-    
+
     try:
         tagDoc = TagDetailsDoc.get(id=tagName)
 
         # check age of doc and set to update the details
         if timeLimit > tagDoc.doc_updated:
             logging.debug(f"Last updated can't be older than {timeLimit} " +
-                             f"but it is {tagDoc.doc_updated} and we need to " +
-                             f"update cache")
+                          f"but it is {tagDoc.doc_updated} and we need to " +
+                          f"update cache")
             updateDetails = True
             updateType = "Updating"
         else:
@@ -106,17 +106,17 @@ def processTag(tagName):
             #     tagDoc.tag_groups = afTagData['tag_groups']
 
             logging.debug(f"Last updated can't be older than {timeLimit} " +
-                             f"and {tagDoc.doc_updated} isn't, will not update cache")
+                          f"and {tagDoc.doc_updated} isn't, will not update cache")
 
 
     except NotFoundError as nfe:
         logging.info(f"No local cache found for tag {tagName} - Creating")
         updateDetails = True
         updateType = "Creating"
-        time.sleep(5) 
-        
-        
-    
+        time.sleep(5)
+
+
+
     if updateDetails:
         afTagData = getTagInfo(tagName)
         # If we get the word 'message' in the return it means something went
@@ -150,18 +150,18 @@ def processTag(tagName):
             if "not found" in afTagData['message']:
                 tagDoc = TagDetailsDoc(meta={'id': tagName}, name=tagName)
                 print(f"{tagDoc} and {tagName}")
-                tagDoc.tag = {"tag_name":tagName,"public_tag_name":tagName,
+                tagDoc.tag = {"tag_name":tagName, "public_tag_name":tagName,
                               "tag_class":"Tag not found in AF",
                               "description":"Tag not found in AF"}
                 tagDoc.tag_groups = tagGroupDict
                 tagDoc.doc_updated = "2019-05-19T21:49:41"
-                
+
                 tagDoc.save()
-    
+
     logging.debug(f"processTag() returns: " +
-                     f"{tagDoc.tag['tag_name'],tagDoc.tag['public_tag_name']}" +
-                     f"{tagDoc.tag['tag_class'],tagDoc.tag_groups[0]['tag_group_name']}," +
-                     f"{tagDoc.tag['description']}")
+                  f"{tagDoc.tag['tag_name'],tagDoc.tag['public_tag_name']}" +
+                  f"{tagDoc.tag['tag_class'],tagDoc.tag_groups[0]['tag_group_name']}," +
+                  f"{tagDoc.tag['description']}")
 
     return (tagDoc.tag['tag_name'], tagDoc.tag['public_tag_name'],
             tagDoc.tag['tag_class'], tagDoc.tag_groups[0]['tag_group_name'],
@@ -176,6 +176,3 @@ def indexDump(indexName, sortField="@timestamp"):
    # for doc in indexData['hits']['hits']:
     #    print("%s) %s" % (doc['_id'], doc['_source']))
     return indexData
-
-
-    
