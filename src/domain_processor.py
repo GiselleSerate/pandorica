@@ -74,7 +74,9 @@ def process_hit(hit):
         while True:
             try:
                 domain_doc = DomainDocument.get(id=hit.meta.id, index=hit.meta.index)
-                break
+                # Break if we find the document
+                if domain_doc:
+                    break
             except Exception as e:
                 # Retry.
                 logging.warning(e)
@@ -98,7 +100,9 @@ def process_hit(hit):
     while True:
         try:
             domain_doc = DomainDocument.get(id=hit.meta.id, index=hit.meta.index)
-            break
+            # Break if we find the document
+            if domain_doc:
+                break
         except Exception as e:
             # Just retry it.
             logging.warning(e)
