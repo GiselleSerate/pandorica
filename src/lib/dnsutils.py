@@ -493,8 +493,8 @@ def getDomainDoc(domainName):
         logging.info(f"No local cache doc found for domain {domainName}")
         updateDetails = True
         updateType = "Creating"
-    except ValueError as ve:
-        logging.error(f"{ve}")
+    except (ValueError, TypeError) as e:
+        logging.error(f"{e}")
         updateDetails = True
         updateType = "Creating"
 
