@@ -17,7 +17,6 @@ LOGGING_LEVEL=INFO
 
 # ------------------------------- FIREWALL -------------------------------------
 
-FW_IP=NOT-SET # TODO: uh wait hang on
 # Set firewall login to the default credentials by default. 
 FW_USERNAME=admin
 FW_PASSWORD=admin
