@@ -26,7 +26,6 @@ This software is provided without support, warranty, or guarantee.
 Use at your own risk.
 '''
 
-
 import logging
 from logging.config import dictConfig
 import os
