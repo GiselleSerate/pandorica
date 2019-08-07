@@ -15,7 +15,7 @@
 # Author: Giselle Serate <gserate@paloaltonetworks.com>
 
 '''
-Palo Alto Networks elasticutils.py
+Palo Alto Networks setuputils.py
 
 Various utilities to help when dealing with Elastic.
 

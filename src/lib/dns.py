@@ -1,5 +1,33 @@
-from elasticsearch_dsl import DocType, Search, Date, Integer, Keyword, Text, Ip
-from elasticsearch_dsl import connections, InnerDoc, Nested, Object
+# Copyright (c) 2019, Palo Alto Networks
+#
+# Permission to use, copy, modify, and/or distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+# OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+# Author: Edward Arcuri <earcuri@paloaltonetworks.com>
+
+'''
+Palo Alto Networks dns.py
+
+Various classes to help when dealing with AutoFocus domain/tag queries. Lifted from the Safe
+repository.
+
+Use this file as an include only.
+
+This software is provided without support, warranty, or guarantee.
+Use at your own risk.
+'''
+
+from elasticsearch_dsl import DocType, Date, Integer, Keyword, Text, Ip
+from elasticsearch_dsl import InnerDoc, Object
 
 
 class DomainDetailsDoc(DocType):
@@ -60,9 +88,9 @@ class DNSEventDoc(DocType):
     Each event is it's own entity in the DB. This is the structure of that entitiy
     '''
     SFN = Object(SFNDNS)
-    
+
     class Index:
-         name = 'threat-*'
+        name = 'threat-*'
 
     @classmethod
     def get_indexable(cls):
