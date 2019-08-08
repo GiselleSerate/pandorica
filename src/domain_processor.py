@@ -28,10 +28,9 @@ Use at your own risk.
 import logging
 from multiprocessing import Pool
 
-from dotenv import load_dotenv
 from elasticsearch_dsl import Search
 from elasticsearch.exceptions import (ConflictError, ConnectionTimeout,
-                                      NotFoundError, RequestError, TransportError)
+                                      NotFoundError)
 
 from domain_docs import AFStatus, DomainDocument
 from lib.dnsutils import updateAfStats, getDomainDoc
