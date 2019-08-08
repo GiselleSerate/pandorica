@@ -27,6 +27,7 @@ Use at your own risk.
 
 import logging
 from multiprocessing import Pool
+import os
 
 from elasticsearch_dsl import Search
 from elasticsearch.exceptions import (ConflictError, ConnectionTimeout,
@@ -129,34 +130,49 @@ def process_hit(hit):
 
 def process_domains():
     '''
-    Use AutoFocus to process all unprocessed non-generic domains in any index.
-    Note that you MUST create a database connection first (with connections.create_connection)
-    before running this function.
+    Use AutoFocus to process all unprocessed applicable domains in any index.
+    We'll check AUTOFOCUS_KEY_IS_UNLIMITED from your .panrc to determine whether this includes
+    generic domains or not.
     '''
-    # Search for non-processed and non-generic.
-    new_nongeneric_search = (Search(index=f"content_*")
-                             .exclude('term', header__keyword='generic')
-                             .query('match', processed=0))
-    new_nongeneric_search.execute()
+    # Check if our AF key is unlimited; if it is, we'll ask about generic domains as well as
+    # non-generic domains.
+    key_is_unlimited = os.getenv('AUTOFOCUS_KEY_IS_UNLIMITED') == 'True'
 
-    # Determine how many AutoFocus points we have.
-    day_af_reqs_left = None
-    while day_af_reqs_left is None:
-        updateAfStats()
-        af_stats_search = Search(index='af-details')
-        af_stats_search.execute()
+    if key_is_unlimited:
+        logging.info("You have an unlimited AutoFocus key, so we'll tag all domains "
+                     "(including generic).")
+        # Search for non-processed and generic as well.
+        to_tag_search = (Search(index=f"content_*")
+                         .query('match', processed=0))
+    else:
+        logging.info("Your AutoFocus key is rate-limited, so we'll only tag non-generic domains.")
+        # Search for non-processed and non-generic.
+        to_tag_search = (Search(index=f"content_*")
+                         .exclude('term', header__keyword='generic')
+                         .query('match', processed=0))
 
-        for hit in af_stats_search:
-            day_af_reqs_left = int(hit.daily_points_remaining / 12)
+    to_tag_search.execute()
+
+    # If we need to worry about AF points, determine how many we have.
+    if not key_is_unlimited:
+        day_af_reqs_left = None
+        while day_af_reqs_left is None:
+            updateAfStats()
+            af_stats_search = Search(index='af-details')
+            af_stats_search.execute()
+
+            for hit in af_stats_search:
+                day_af_reqs_left = int(hit.daily_points_remaining / 12)
 
     with Pool() as pool:
-        iterator = pool.imap(process_hit, new_nongeneric_search.scan())
+        iterator = pool.imap(process_hit, to_tag_search.scan())
         # Write IPs of all matching documents back to test index.
         while True:
-            logging.debug(f"~{day_af_reqs_left} AutoFocus requests left today.")
-            if day_af_reqs_left < 1:
-                # Not enough points to do more today.
-                return
+            if not key_is_unlimited:
+                logging.debug(f"~{day_af_reqs_left} AutoFocus requests left today.")
+                if day_af_reqs_left < 1:
+                    # Not enough points to do more today.
+                    return
             try:
                 next(iterator)
             except StopIteration:
@@ -165,15 +181,15 @@ def process_domains():
             except (NotFoundError, ConnectionTimeout) as e:
                 logging.warning("Encountered temporary issue. Skipping this result.")
                 logging.warning(e)
-            # Decrement AF stats.
-            day_af_reqs_left -= 1
+            if not key_is_unlimited:
+                # Decrement AF stats.
+                day_af_reqs_left -= 1
 
 
 
 if __name__ == '__main__':
     config_all()
 
-    # Ask AutoFocus about all unprocessed non-generic domains
-    # multiple times (in case of failure).
+    # Ask AutoFocus about domains multiple times (in case of failure).
     for _ in range(3):
         process_domains()
