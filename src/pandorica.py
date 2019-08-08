@@ -40,8 +40,7 @@ def pandorica():
     # Download latest release notes and parse any that haven't been.
     download_then_parse_all()
 
-    # Ask AutoFocus about all unprocessed non-generic domains
-    # multiple times (in case of failure).
+    # Ask AutoFocus about domains multiple times (in case of failure).
     for _ in range(3):
         process_domains()
 
